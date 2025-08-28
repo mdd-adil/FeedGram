@@ -1,0 +1,29 @@
+const express = require('express');
+const env=require('dotenv').config();
+const app = express();
+const mongoDb=require('./config/mongoConnect');
+const loginRoute=require('./routes/loginRoute');
+const registerRoute=require('./routes/regisrterRoute');
+const logoutRoute=require('./routes/logoutRoute');
+const PORT = process.env.PORT || 5000;
+app.use(express.json());
+
+
+
+
+
+
+
+
+
+
+app.use('/login',loginRoute);
+app.use('/register',registerRoute);
+app.use('/logout',logoutRoute);
+app.get('/',(req,res)=>{
+    res.send("API is running....");
+});
+app.listen(5000,"0.0.0.0",(err)=>{
+    if(err) console.log(err);
+    else console.log(`Server is running on port ${PORT}`);
+})
