@@ -1,14 +1,15 @@
 const jwt=require('jsonwebtoken');
 const cookieParser=require('cookie-parser');
 const isLoggedIn=(req,res,next)=>{
-    const token=req.cookies.token || req.header('Authorization')?.replace('Bearer ','');
+    const token=req.cookies.token ;
     if(!token){
-res.status(401).send({message:'Access denied. No token provided.'});
-        return false;
+return res.status(401).send({message:'Access denied. No token provided.'});
+       
     }
     try{
-        const decoded=jwt.verify(token,process.env.SECRET);
-        req.user=decoded;
+        const data=jwt.verify(token,process.env.SECRET);
+        console.log(data);
+        req.user=data;
         next();
     }catch(error){
         res.status(400).send({message:'Invalid token.'});

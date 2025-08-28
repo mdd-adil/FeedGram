@@ -18,8 +18,8 @@ try {
     if (!isPasswordValid) {
         return res.status(401).json({ message: 'Invalid email or password' });
     }
-    const token = jwt.sign({ userId: user._id }, process.env.SECRET, { expiresIn: '1h' });
-    cookieParser.JSONCookie(token)
+    const token = jwt.sign({ userId: user._id ,email:user.email}, process.env.SECRET, { expiresIn: '1h' });
+    res.cookie('token', token);
     res.send({ token });
 } catch (error) {
     console.error('Login error:', error.message);

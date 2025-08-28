@@ -5,8 +5,12 @@ const mongoDb=require('./config/mongoConnect');
 const loginRoute=require('./routes/loginRoute');
 const registerRoute=require('./routes/regisrterRoute');
 const logoutRoute=require('./routes/logoutRoute');
+const createPostRoute=require('./routes/createPostRoute');
+const cookieParser = require('cookie-parser');
+const isLoggedIn = require('./middleware/isLoggedIn');
 const PORT = process.env.PORT || 5000;
 app.use(express.json());
+app.use(cookieParser())
 
 
 
@@ -20,6 +24,7 @@ app.use(express.json());
 app.use('/login',loginRoute);
 app.use('/register',registerRoute);
 app.use('/logout',logoutRoute);
+app.use('/createPost',isLoggedIn,createPostRoute);
 app.get('/',(req,res)=>{
     res.send("API is running....");
 });
