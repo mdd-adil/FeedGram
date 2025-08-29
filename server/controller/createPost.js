@@ -16,13 +16,15 @@ const post = async (req, res) => {
     const newPost = await postModel.create({
       title,
       content,
-      userId: userIdObj,
+      user: userIdObj,
     });
     const user = await userModel.findById(userIdObj);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    user.post.push(newPost._id);
+ 
+  user.post.push(newPost._id);
+
     await user.save();
     res
       .status(201)

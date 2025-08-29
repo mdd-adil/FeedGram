@@ -2,6 +2,10 @@ const mongoose = require('mongoose');
 
 
 const postSchema = new mongoose.Schema({
+    user:{
+          type:String,
+           required: true,
+    },
     title: {
         type: String,
         required: true,
@@ -12,9 +16,11 @@ const postSchema = new mongoose.Schema({
         required: true,
         trim: true,
     },
-    likes: {
+    likes:[ {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    }
-})
-    module.exports = mongoose.model('post', postSchema);
+        ref: 'User',
+       
+       
+    }],
+    })
+    module.exports = mongoose.model('Post', postSchema);
