@@ -1,35 +1,36 @@
+import axios from "axios";
 import { useState } from "react";
 import { Container, Form, Button, Card, Alert, Row, Col } from "react-bootstrap";
-import { Link, useNavigate } from "react-router-dom";
+import {  Link, useNavigate } from "react-router-dom";
+
 const SignUp = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  });
+   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [username,setUsername]=useState("")
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-
-    setIsLoading(true);
-
-    // Simulate API call
-    setTimeout(() => {
-      navigate("/");
-      setIsLoading(false);
-    }, 1000);
+    try {
+      // Send the form data to the backend API
+      const response = await axios.post('http://localhost:5000/register',{"username":username,"password":password,"email":email});
+      
+      // Store the JWT token, typically in localStorage or a cookie
+      // console.log(response.data)
+      
+      
+      
+      navigate('/login')
+    } catch (error) {
+      // setMessage(error.response.data.message || 'Login failed.');
+    
+      setError(error.message)
+      console.error('Login error:', error);
+    }
   };
 
   return (
@@ -61,8 +62,8 @@ const SignUp = () => {
                           type="text"
                           name="username"
                           placeholder="John"
-                          value={formData.username}
-                          onChange={handleChange}
+                          value={username}
+                          onChange={(e)=>{setUsername(e.target.value)}}
                           required
                           className="py-2"
                           style={{ borderRadius: "10px" }}
@@ -78,8 +79,8 @@ const SignUp = () => {
                       type="email"
                       name="email"
                       placeholder="name@example.com"
-                      value={formData.email}
-                      onChange={handleChange}
+                      value={email}
+                      onChange={(e)=>{setEmail(e.target.value)}}
                       required
                       className="py-2"
                       style={{ borderRadius: "10px" }}
@@ -92,8 +93,8 @@ const SignUp = () => {
                       type="password"
                       name="password"
                       placeholder="Create a strong password"
-                      value={formData.password}
-                      onChange={handleChange}
+                      value={password}
+                      onChange={(e)=>{setPassword(e.target.value)}}
                       required
                       className="py-2"
                       style={{ borderRadius: "10px" }}
@@ -122,7 +123,7 @@ const SignUp = () => {
                 <div className="text-center">
                   <p className="text-muted mb-0">
                     Already have an account?{" "}
-                    <Link to="/" className="fw-semibold text-decoration-none" style={{ color: "#f5576c" }}>
+                    <Link to="/login" className="fw-semibold text-decoration-none" style={{ color: "#f5576c" }}>
                       Sign In
                     </Link>
                   </p>

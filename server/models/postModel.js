@@ -6,6 +6,12 @@ const postSchema = new mongoose.Schema({
           type:String,
            required: true,
     },
+    
+    username:{
+type:String,
+require:true,
+trim:true
+    },
     title: {
         type: String,
         required: true,
@@ -22,5 +28,6 @@ const postSchema = new mongoose.Schema({
        
        
     }],
+    timestamp: { type: Date, default: Date.now }
     })
     module.exports = mongoose.model('Post', postSchema);

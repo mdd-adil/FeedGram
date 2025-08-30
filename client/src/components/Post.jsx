@@ -59,9 +59,9 @@ export default function Post(props) {
               <button className="btn btn-sm btn-outline-light d-flex align-items-center">
                 <span className="me-1">❤️</span> Like
               </button>
-              {props.edit==false?<></>:<button className="btn btn-sm btn-outline-light" >
+              <button className="btn btn-sm btn-outline-light" >
                 Edit
-              </button>}
+              </button>
           </div>
         </div>
       </div>

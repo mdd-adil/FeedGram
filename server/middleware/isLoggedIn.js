@@ -1,18 +1,31 @@
-const jwt=require('jsonwebtoken');
-const cookieParser=require('cookie-parser');
-const isLoggedIn=(req,res,next)=>{
-    const token=req.cookies.token ;
-    if(!token){
-return res.status(401).send({message:'Access denied. No token provided.'});
-       
+const jwt = require('jsonwebtoken');
+
+const isLoggedIn = (req, res, next) => {
+    let token;
+
+    // 1. Check for token in the Authorization header
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+    } 
+    
+    // 2. If not found in the header, check the cookie
+    if (!token && req.cookies && req.cookies.token) {
+        token = req.cookies.token;
     }
-    try{
-        const data=jwt.verify(token,process.env.SECRET);
-        console.log(data);
-        req.user=data;
+
+    if (!token) {
+        return res.status(401).json({ message: 'Access denied. No token provided.' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
         next();
-    }catch(error){
-        res.status(400).send({message:'Invalid token.'});
+    } catch (error) {
+        console.error('JWT Verification Error:', error.message);
+        return res.status(401).json({ message: 'Invalid or expired token.' });
     }
-}
-module.exports=isLoggedIn;
+};
+
+module.exports = isLoggedIn;

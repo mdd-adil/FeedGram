@@ -1,32 +1,41 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Container, Form, Button, Card, Alert } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
+import axios from 'axios';
+
+
 
 const Login = () => {
   const navigate = useNavigate();
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
+  
   const handleSubmit = async (e) => {
+    
     e.preventDefault();
-    setError("");
-    setIsLoading(true);
-
-   setIsLoading(true);
+    try {
+      // Send the form data to the backend API
+      const response = await axios.post('http://localhost:5000/login',{"email":email,"password":password});
+      setError(response.data.message);
+      // Store the JWT token, typically in localStorage or a cookie
+      // console.log(response.data)
+      
+      localStorage.setItem("token",response.data)
+      
+      navigate('/home')
+    } catch (error) {
+      // setMessage(error.response.data.message || 'Login failed.');
+    
+      setError(error.message)
+      console.error('Login error:', error);
+    }
+    
 
     // Simulate API call
-    setTimeout(() => {
-      if (email === "user@example.com" && password === "password") {
-        navigate("/home");
-      } else if (!email || !password) {
-        setError("Please fill in all fields");
-      } else {
-        setError("Invalid email or password");
-      }
-      setIsLoading(false);
-    }, 1000);
+   
   };
 
   return (
@@ -53,7 +62,7 @@ const Login = () => {
                   <Form.Group className="mb-4">
                     <Form.Label className="fw-semibold">Email Address</Form.Label>
                     <Form.Control
-                      type="email"
+                      type="text"
                       placeholder="name@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}

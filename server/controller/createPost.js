@@ -5,7 +5,7 @@ const isLoggedIn = require("../middleware/isLoggedIn");
 const post = async (req, res) => {
   const { title, content } = req.body;
   const userId = req.user.userId;
-
+ const username=req.user.username;
   try {
     if (!title || !content || !userId) {
       return res
@@ -17,15 +17,20 @@ const post = async (req, res) => {
       title,
       content,
       user: userIdObj,
+      username,
     });
     const user = await userModel.findById(userIdObj);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
  
-  user.post.push(newPost._id);
+if (!Array.isArray(user.post)) {
+  user.post = [];
+}
+user.post.push(newPost._id);
 
-    await user.save();
+
+
     res
       .status(201)
       .json({ message: "Post created successfully", post: newPost });

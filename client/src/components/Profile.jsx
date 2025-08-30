@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Container, Row, Col, Card, Button, Nav, Badge, Image } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import Post from "./Post";
-
+import axios from "axios";
 
 
 const Profile = () => {
@@ -73,9 +73,24 @@ const Profile = () => {
     },
   ];
 
-  const handleLogout = () => {
-    navigate("/");
-  };
+  const handleLogout = async () => {
+    try {
+        // Send the POST request with the 'withCredentials' option
+        const response = await axios.post('http://localhost:5000/logout', {}, { withCredentials: true });
+        
+        // Remove the token from localStorage (optional, but good practice)
+        localStorage.removeItem("token");
+        
+        // Log the response from the server for confirmation
+        console.log(response.data);
+        
+        // Redirect the user to the login page
+        navigate('/login');
+    } catch (error) {
+        // Log the detailed error message
+        console.error('Logout error:', error.message);
+    }
+};
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
@@ -208,7 +223,7 @@ const Profile = () => {
         {
           <Row className="g-3 mb-5">
             {posts.map((post) => (
-              <Post post={post} edit={true}/>
+              <Post post={post}/>
             ))}
           </Row>
         }

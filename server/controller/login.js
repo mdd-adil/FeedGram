@@ -8,15 +8,16 @@ const loginUser=async (req, res) => {
 const { email, password } = req.body;
 try {
     if(!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required' });
+        
+        return res.status(400).send({ message: 'Email and password are required' });
     }
     const user = await userModel.findOne({ email });
     if (!user) {
-        return res.status(401).json({ message: 'Invalid email or password' });
+        return res.status(401).send({ message: 'Invalid email or password' });
     }
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-        return res.status(401).json({ message: 'Invalid email or password' });
+        return res.status(401).send({ message: 'Invalid email or password' });
     }
     const token = jwt.sign({ userId: user._id ,email:user.email}, process.env.SECRET, { expiresIn: '1h' });
     res.cookie('token', token);
@@ -25,6 +26,6 @@ try {
     console.error('Login error:', error.message);
     res.status(500).send({ message: 'Server error' }); 
 } 
-next();
+
 }
 module.exports =loginUser ;

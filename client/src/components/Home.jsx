@@ -1,128 +1,246 @@
 import { useState,useEffect } from "react";
-import Post from "./Post";
-export const Home=()=>{
-const [posts, setPosts] = useState([]);
-// State for the new post form
-const [newPost, setNewPost] = useState({ title: '', content: '' });
-// State to manage the loading status
-const [loading, setLoading] = useState(true);
-// State to simulate a logged-in user
-const [user, setUser] = useState({
-    _id: 'user123',
-    username: 'JaneDoe',
-    profilePic: 'https://placehold.co/100x100/A0BFE3/ffffff?text=JD'
-});
+import { Container, Card, Button, Row, Col, Image, Badge } from "react-bootstrap";
+import { useNavigate } from "react-router-dom";
+import FeedPost from "./FeedPost";
+import axios from "axios";
 
-// useEffect to simulate fetching posts from a backend API
-useEffect(() => {
-    // In a real app, you would fetch data from your API here:
-    // fetch('/api/posts')
-    //   .then(res => res.json())
-    //   .then(data => {
-        //     setPosts(data.posts);
-        //     setLoading(false);
-        //   })
-        //   .catch(error => console.error("Error fetching posts:", error));
-        
-        // Using mock data for immediate demonstration
-        setTimeout(() => {
-            setPosts([
-                { 
-                    _id: 'p1', 
-                    title: 'My First Post', 
-                    content: 'This is an example post content. It shows how the homepage will look with some data. The design is simple, clean, and responsive.', 
-                    user: { _id: 'u1', username: 'AlexW' }, 
-                    createdAt: new Date() 
-                },
-                { 
-                    _id: 'p2', 
-                    title: 'The Road to Full-Stack', 
-                    content: 'Building a full-stack application is a great way to improve your skills. I am excited about this project!', 
-                    user: { _id: 'u2', username: 'FullStackDev' }, 
-                    createdAt: new Date() 
-                },
-            ]);
-            setLoading(false);
-        }, 1500); // Simulate network delay
-    }, []);
-    
-    // Function to handle post creation
-    const handleCreatePost = async (e) => {
-    e.preventDefault();
-    if (!newPost.title || !newPost.content) {
-      alert('Please enter a title and content.');
-      return;
+
+const Home = () => {
+  const navigate = useNavigate();
+  const [posts, setPosts] = useState([
+    // {
+    //   id: 1,
+    //   userId: 1,
+    //   userName: "Sarah Johnson",
+    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
+    //   userVerified: true,
+    //   imageUrl: "https://picsum.photos/600/600?random=1",
+    //   caption: "Beautiful sunset at the beach 🌅 Nature never fails to amaze me!",
+    //   likes: 234,
+    //   isLiked: false,
+    //   comments: 12,
+    //   timestamp: "2 hours ago",
+    // },
+    // {
+    //   id: 2,
+    //   userId: 2,
+    //   userName: "Mike Chen",
+    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mike",
+    //   userVerified: false,
+    //   imageUrl: "https://picsum.photos/600/600?random=2",
+    //   caption: "Coffee and code ☕💻 Perfect morning vibes",
+    //   likes: 189,
+    //   isLiked: true,
+    //   comments: 8,
+    //   timestamp: "5 hours ago",
+    // },
+    // {
+    //   id: 3,
+    //   userId: 3,
+    //   userName: "Emma Watson",
+    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Emma",
+    //   userVerified: true,
+    //   imageUrl: "https://picsum.photos/600/600?random=3",
+    //   caption: "Mountain hiking adventures 🏔️ The view was worth every step!",
+    //   likes: 456,
+    //   isLiked: false,
+    //   comments: 23,
+    //   timestamp: "1 day ago",
+    // },
+    // {
+    //   id: 4,
+    //   userId: 4,
+    //   userName: "Alex Rivera",
+    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex",
+    //   userVerified: false,
+    //   imageUrl: "https://picsum.photos/600/600?random=4",
+    //   caption: "City lights at night 🌃 Never gets old",
+    //   likes: 321,
+    //   isLiked: true,
+    //   comments: 15,
+    //   timestamp: "2 days ago",
+    // },
+    // {
+    //   id: 5,
+    //   userId: 5,
+    //   userName: "Lisa Park",
+    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Lisa",
+    //   userVerified: true,
+    //   imageUrl: "https://picsum.photos/600/600?random=5",
+    //   caption: "Weekend vibes 🎉 Making memories with the best people",
+    //   likes: 278,
+    //   isLiked: false,
+    //   comments: 19,
+    //   timestamp: "3 days ago",
+    // },
+    // {
+    //   id: 6,
+    //   userId: 6,
+    //   userName: "Tom Wilson",
+    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Tom",
+    //   userVerified: false,
+    //   imageUrl: "https://picsum.photos/600/600?random=6",
+    //   caption: "Nature photography 📸 Found this hidden gem today",
+    //   likes: 412,
+    //   isLiked: false,
+    //   comments: 31,
+    //   timestamp: "4 days ago",
+    // },
+  ]);
+
+
+
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+         const token = localStorage.getItem("token");
+        const res = await axios.get("http://localhost:5000/home",{ headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        withCredentials: true
+      });
+        setPosts(res.data);
+      } catch (error) {
+        console.error("Error fetching posts:", error);
+      }
+    };
+    fetchPosts();
+  }, []);
+
+  const handleProfileClick = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get('http://localhost:5000/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        withCredentials: true
+      });
+      console.log(response.data);
+      navigate('/profile');
+    } catch (error) {
+      console.error('Profile fetch error:', error.message);
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
     }
-
-    setLoading(true);
-    
-    // In a real app, you would make a POST request to your API:
-    // await fetch('/api/posts', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //     // You would also send an authentication token here, e.g., 'Authorization': 'Bearer YOUR_JWT_TOKEN'
-    //   },
-    //   body: JSON.stringify({ ...newPost, userId: user._id }),
-    // });
-
-    // Simulate successful API response and update state
-    setTimeout(() => {
-      const createdPost = {
-        _id: `p${posts.length + 1}`,
-        title: newPost.title,
-        content: newPost.content,
-        user: { _id: user._id, username: user.username },
-        createdAt: new Date(),
-      };
-      setPosts([createdPost, ...posts]);
-      setNewPost({ title: '', content: '' });
-      setLoading(false);
-    }, 1000); // Simulate network delay
   };
 
-  // Component for the post creation form
+  const handleLogout = async () => {
+    try {
+      await axios.post('http://localhost:5000/logout', {}, { withCredentials: true });
+      localStorage.removeItem("token");
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error.message);
+      localStorage.removeItem("token");
+      navigate('/login');
+    }
+  };
 
-
-  // Main render logic
   return (
-    <div className="min-h-screen bg-gray-50 p-6 font-sans">
-      <script src="https://cdn.tailwindcss.com"></script>
-      {/* Header Section */}
-      <header className="flex justify-between items-center py-4 border-b border-gray-200 mb-6">
-        <h1 className="text-3xl font-extrabold text-gray-900">Social Sphere</h1>
-        <div className="flex items-center">
-          <span className="font-medium text-gray-700 mr-3">Welcome, {user.username}!</span>
-          <img src={user.profilePic} alt="User" className="w-10 h-10 rounded-full" />
-        </div>
-      </header>
-      
-      {/* Main Content Area */}
-      <div className="max-w-3xl mx-auto">
-        {/* Post Creation Form */}
-        {/* <PostCreationForm /> */}
-        
-        {/* Post Feed */}
-        <div className="mt-8">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-800">Latest Posts</h2>
-          {loading ? (
-            <div className="text-center text-gray-500 py-10">
-              <svg className="animate-spin h-10 w-10 text-blue-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <p className="mt-4">Loading posts...</p>
+    <div style={{ minHeight: "100vh", background: "#f0f2f5" }}>
+      {/* Header */}
+      <div style={{ 
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        padding: "15px 0",
+        marginBottom: "30px",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.1)"
+      }}>
+        <Container>
+          <div className="d-flex justify-content-between align-items-center">
+            <h2 className="text-white mb-0 fw-bold d-flex align-items-center">
+              <span style={{ fontSize: "30px", marginRight: "10px" }}>🌟</span>
+              FeedGram
+            </h2>
+            <div>
+                <Button 
+                className="me-3"
+                  variant="outline-light"
+                 onClick={handleProfileClick}
+                 style={{ borderRadius: "20px" ,
+                   background:"linear-gradient(135deg, #6d56d5ff 0%, #418bcfff 100%)",
+                }}
+                >
+                  Profile
+                </Button>
+              
+              <Button 
+                variant="outline-light"
+                onClick={handleLogout}
+                style={{ borderRadius: "20px" ,
+                   background:"linear-gradient(135deg, #6d56d5ff 0%, #418bcfff 100%)",
+                }}
+              >
+                Logout
+              </Button>
             </div>
-          ) : (
-            posts.length > 0 ? (
-              posts.map((post) => <Post key={post._id} post={post} edit={false}/>)
-            ) : (
-              <p className="text-center text-gray-500 py-10">No posts to display.</p>
-            )
-          )}
-        </div>
+          </div>
+        </Container>
       </div>
+
+      <Container>
+        <Row className="justify-content-center">
+          <Col lg={7}>
+            {/* Create Post Card */}
+            <Card className="mb-4 shadow-sm border-0" style={{ borderRadius: "15px" }}>
+              <Card.Body className="p-4">
+                <div className="d-flex align-items-center">
+                  <Image
+                    src="https://api.dicebear.com/7.x/avataaars/svg?seed=CurrentUser"
+                    roundedCircle
+                    style={{ width: "40px", height: "40px", marginRight: "15px" }}
+                  />
+                  <Button 
+                    variant="light"
+                    className="flex-grow-1 text-start"
+                    style={{ 
+                      borderRadius: "25px",
+                      padding: "10px 20px",
+                      backgroundColor: "#f0f2f5",
+                      border: "1px solid #ddd",
+                      color: "#65676b"
+                    }}
+                  >
+                    What's on your mind?
+                  </Button>
+                  <Button
+                    style={{ 
+                      marginLeft: "10px",
+                      borderRadius: "10px",
+                      background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                      border: "none"
+                    }}
+                  >
+                    📸 Photo
+                  </Button>
+                </div>
+              </Card.Body>
+            </Card>
+
+            {/* Posts Feed */}
+            {posts.map((post) => <FeedPost post={post}/>)}
+              
+            {/* Load More */}
+            <div className="text-center mb-5">
+              <Button
+                size="lg"
+                style={{ 
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  border: "none",
+                  borderRadius: "25px",
+                  padding: "12px 40px",
+                  fontWeight: "600"
+                }}
+              >
+                Load More Posts
+              </Button>
+            </div>
+          </Col>
+        </Row>
+      </Container>
     </div>
   );
-  }
-export default Home
+};
+
+export default Home;
