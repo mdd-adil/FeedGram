@@ -1,6 +1,7 @@
 const profile=require('../controller/profile');
 const express=require('express');
+const isLoggedIn = require('../middleware/isLoggedIn');
 const router=express.Router();
-const isLoggedIn=require('../middleware/isLoggedIn');
-router.get('/',profile);
+
+router.get('/',isLoggedIn,profile);
 module.exports=router;

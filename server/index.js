@@ -27,10 +27,9 @@ app.use(bodyParser.json())
 
 app.use('/login',loginRoute);
 app.use('/register',registerRoute);
-app.use('/logout',isLoggedIn,logoutRoute);
-app.use('/createPost',isLoggedIn,createPostRoute);
-app.use('/home',isLoggedIn,homeRoute)
-app.use('/profile',isLoggedIn,profileRuote)
+app.use('/createPost',createPostRoute);
+app.use('/home',homeRoute)
+app.use('/profile',profileRuote)
 app.get('/',(req,res)=>{
     res.send("API is running....");
 });

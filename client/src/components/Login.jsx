@@ -20,7 +20,7 @@ const Login = () => {
       // Send the form data to the backend API
       const response = await axios.post('http://localhost:5000/login',{"email":email,"password":password});
       setError(response.data.message);
-      // Store the JWT token, typically in localStorage or a cookie
+      // Store the JWT token, typically in localStorage or a cookielocal
       // console.log(response.data)
       
       localStorage.setItem("token",response.data)

@@ -108,22 +108,9 @@ const Home = () => {
   }, []);
 
   const handleProfileClick = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get('http://localhost:5000/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        withCredentials: true
-      });
-      console.log(response.data);
+   
       navigate('/profile');
-    } catch (error) {
-      console.error('Profile fetch error:', error.message);
-      if (error.response?.status === 401) {
-        navigate('/login');
-      }
-    }
+    
   };
 
   const handleLogout = async () => {
@@ -133,8 +120,8 @@ const Home = () => {
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error.message);
-      localStorage.removeItem("token");
-      navigate('/login');
+      // localStorage.removeItem("token");
+      // navigate('/login');
     }
   };
 

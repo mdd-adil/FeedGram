@@ -1,97 +1,126 @@
-import { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Container, Row, Col, Card, Button, Nav, Badge, Image } from "react-bootstrap";
-import { useNavigate } from "react-router-dom";
-import Post from "./Post";
+import { useNavigate,Navigate } from "react-router-dom";
 import axios from "axios";
+
+// This component will be used to display an individual post
+const Post = ({ post }) => {
+  return (
+    <Col key={post._id} xs={12} sm={6} lg={4}>
+      <Card
+        className="h-100 shadow-sm border-0"
+        style={{
+          borderRadius: "15px",
+          overflow: "hidden",
+          cursor: "pointer",
+          transition: "transform 0.3s",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
+        onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+      >
+        <div style={{ position: "relative", paddingBottom: "100%", overflow: "hidden" }}>
+          <img
+            src={post.imageUrl || "https://placehold.co/600x600/f0f2f5/65676b?text=No+Image"}
+            alt={post.caption}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
+          <div
+            className="overlay"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.7) 100%)",
+              opacity: 0,
+              transition: "opacity 0.3s",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              justifyContent: "flex-end",
+              padding: "20px",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}
+          >
+            <div className="text-white w-100">
+              <p className="mb-2 fw-semibold">{post.caption}</p>
+              <div className="d-flex justify-content-between align-items-center mt-2">
+                <div className="d-flex align-items-center">
+                  <span>❤️ {post.likes ? post.likes.length : 0}</span>
+                </div>
+                <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </Col>
+  );
+};
 
 
 const Profile = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("posts");
+  const [loading, setLoading] = useState(true);
+  const [profileData, setProfileData] = useState(null);
+  const [error, setError] = useState(null);
   
-  // Mock user data
-  const user = {
-    name: "John Doe",
-    username: "@johndoe",
-    bio: "Full Stack Developer | Tech Enthusiast | Coffee Lover ☕",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=John",
-    posts: 42,
-    followers: 1234,
-    following: 567,
-    verified: true,
-  };
-
-  // Mock posts data
-  const posts= [
-    {
-      id: 1,
-      imageUrl: "https://picsum.photos/400/400?random=1",
-      caption: "Beautiful sunset at the beach 🌅",
-      likes: 234,
-      comments: 12,
-      timestamp: "2 hours ago",
-    },
-    {
-      id: 2,
-      imageUrl: "https://picsum.photos/400/400?random=2",
-      caption: "Coffee and code ☕💻",
-      likes: 189,
-      comments: 8,
-      timestamp: "5 hours ago",
-    },
-    {
-      id: 3,
-      imageUrl: "https://picsum.photos/400/400?random=3",
-      caption: "Mountain hiking adventures 🏔️",
-      likes: 456,
-      comments: 23,
-      timestamp: "1 day ago",
-    },
-    {
-      id: 4,
-      imageUrl: "https://picsum.photos/400/400?random=4",
-      caption: "City lights at night 🌃",
-      likes: 321,
-      comments: 15,
-      timestamp: "2 days ago",
-    },
-    {
-      id: 5,
-      imageUrl: "https://picsum.photos/400/400?random=5",
-      caption: "Weekend vibes 🎉",
-      likes: 278,
-      comments: 19,
-      timestamp: "3 days ago",
-    },
-    {
-      id: 6,
-      imageUrl: "https://picsum.photos/400/400?random=6",
-      caption: "Nature photography 📸",
-      likes: 412,
-      comments: 31,
-      timestamp: "4 days ago",
-    },
-  ];
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setLoading(false);
+        return navigate("/login");
+      }
+      try {
+        const res = await axios.get("http://localhost:5000/profile", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          withCredentials: true,
+        });
+        setProfileData(res.data);
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+        setError("Failed to fetch profile. Please log in again.");
+        // localStorage.removeItem("token");
+        // navigate("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, [navigate]);
 
   const handleLogout = async () => {
     try {
-        // Send the POST request with the 'withCredentials' option
-        const response = await axios.post('http://localhost:5000/logout', {}, { withCredentials: true });
-        
-        // Remove the token from localStorage (optional, but good practice)
-        localStorage.removeItem("token");
-        
-        // Log the response from the server for confirmation
-        console.log(response.data);
-        
-        // Redirect the user to the login page
-        navigate('/login');
+      await axios.post("http://localhost:5000/logout", {}, { withCredentials: true });
+      localStorage.removeItem("token");
+      navigate("/login");
     } catch (error) {
-        // Log the detailed error message
-        console.error('Logout error:', error.message);
+      console.error("Logout error:", error);
+      // localStorage.removeItem("token");
+      // navigate("/login");
     }
-};
+  };
 
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><p className="text-gray-500">Loading profile...</p></div>;
+  if (error) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><p className="text-red-500">{error}</p></div>;
+  if (!profileData) return <Navigate to="/login" />;
+
+  const user = profileData.user || {};
+  const posts = profileData.posts || [];
+  
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       {/* Header */}
@@ -131,7 +160,7 @@ const Profile = () => {
               <Col md={3} className="text-center text-md-start">
                 <div className="position-relative d-inline-block">
                   <Image
-                    src={user.avatar}
+                    src={user.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=avatar"}
                     roundedCircle
                     style={{ 
                       width: "150px", 
@@ -163,8 +192,8 @@ const Profile = () => {
                 <div className="mt-3 mt-md-0">
                   <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-3">
                     <div>
-                      <h3 className="mb-0 fw-bold">{user.name}</h3>
-                      <p className="text-muted mb-2">{user.username}</p>
+                      <h3 className="mb-0 fw-bold">{user.username}</h3>
+                      <p className="text-muted mb-2">{user.email}</p>
                     </div>
                     <div>
                       <Button 
@@ -187,15 +216,13 @@ const Profile = () => {
                     </div>
                   </div>
                   
-                  <p className="mb-3">{user.bio}</p>
+                  <p className="mb-3">{user.bio || "No bio available."}</p>
                   
                   <Row className="text-center text-md-start">
                     <Col xs={4} md={2}>
-                      <h5 className="fw-bold mb-0" style={{ color: "#667eea" }}>{user.posts}</h5>
+                      <h5 className="fw-bold mb-0" style={{ color: "#667eea" }}>{posts.length}</h5>
                       <small className="text-muted">Posts</small>
                     </Col>
-                   
-                    
                   </Row>
                 </div>
               </Col>
@@ -221,14 +248,16 @@ const Profile = () => {
         </Nav>
 
         {
-          <Row className="g-3 mb-5">
-            {posts.map((post) => (
-              <Post post={post}/>
-            ))}
-          </Row>
+          posts.length > 0 ? (
+            <Row className="g-3 mb-5">
+              {posts.map((post) => (
+                <Post key={post._id} post={post}/>
+              ))}
+            </Row>
+          ) : (
+            <p className="text-center text-muted">You haven't made any posts yet.</p>
+          )
         }
-
-       
       </Container>
     </div>
   );
