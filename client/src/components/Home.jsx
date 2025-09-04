@@ -1,9 +1,7 @@
-import { useState,useEffect } from "react";
-import { Container, Card, Button, Row, Col, Image, Badge } from "react-bootstrap";
+import { useEffect, useState } from "react";
+import { Container, Card, Button, Row, Col, Image, Form } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import FeedPost from "./FeedPost";
-import axios from "axios";
-
 
 const Home = () => {
   const navigate = useNavigate();
@@ -87,42 +85,49 @@ const Home = () => {
     //   timestamp: "4 days ago",
     // },
   ]);
-
-
-
   useEffect(() => {
-    const fetchPosts = async () => {
-      try {
-         const token = localStorage.getItem("token");
-        const res = await axios.get("http://localhost:5000/home",{ headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        withCredentials: true
+    try{async function fetchPosts() {
+      // Example fetch call - replace with your actual API endpoint
+      const response = await fetch('http://localhost:5000/home', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
       });
-        setPosts(res.data);
-      } catch (error) {
-        console.error("Error fetching posts:", error);
-      }
-    };
-    fetchPosts();
+      const data = await response.json();
+      setPosts(data);
+    }
+    fetchPosts();}catch(err){console.log(err)}
   }, []);
 
-  const handleProfileClick = async () => {
-   
-      navigate('/profile');
-    
+  const handleLike = (postId) => {
+    setPosts(posts.map(post => {
+      if (post.id === postId) {
+        return {
+          ...post,
+          isLiked: !post.isLiked,
+          likes: post.isLiked ? post.likes - 1 : post.likes + 1
+        };
+      }
+      return post;
+    }));
   };
 
-  const handleLogout = async () => {
-    try {
-      await axios.post('http://localhost:5000/logout', {}, { withCredentials: true });
-      localStorage.removeItem("token");
-      navigate('/login');
-    } catch (error) {
-      console.error('Logout error:', error.message);
-      // localStorage.removeItem("token");
-      // navigate('/login');
+  const handleProfileClick = () => {
+    if(!localStorage.getItem("token")) {
+      navigate("/login");
+      return;
     }
+    navigate("/profile");
+  };
+
+  const handleLogout = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    localStorage.removeItem("token");
+    navigate("/login");
   };
 
   return (
@@ -138,25 +143,26 @@ const Home = () => {
           <div className="d-flex justify-content-between align-items-center">
             <h2 className="text-white mb-0 fw-bold d-flex align-items-center">
               <span style={{ fontSize: "30px", marginRight: "10px" }}>🌟</span>
-              FeedGram
+              Social Feed
             </h2>
-            <div>
-                <Button 
-                className="me-3"
-                  variant="outline-light"
-                 onClick={handleProfileClick}
-                 style={{ borderRadius: "20px" ,
-                   background:"linear-gradient(135deg, #6d56d5ff 0%, #418bcfff 100%)",
+            <div className="d-flex align-items-center">
+              <Image
+                src="https://api.dicebear.com/7.x/avataaars/svg?seed=CurrentUser"
+                roundedCircle
+                onClick={handleProfileClick}
+                style={{ 
+                  width: "40px", 
+                  height: "40px",
+                  marginRight: "15px",
+                  cursor: "pointer",
+                  border: "2px solid white"
                 }}
-                >
-                  Profile
-                </Button>
-              
+              />
               <Button 
                 variant="outline-light"
                 onClick={handleLogout}
-                style={{ borderRadius: "20px" ,
-                   background:"linear-gradient(135deg, #6d56d5ff 0%, #418bcfff 100%)",
+                style={{ borderRadius: "20px",
+                  background:"linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
                 }}
               >
                 Logout
@@ -176,11 +182,17 @@ const Home = () => {
                   <Image
                     src="https://api.dicebear.com/7.x/avataaars/svg?seed=CurrentUser"
                     roundedCircle
-                    style={{ width: "40px", height: "40px", marginRight: "15px" }}
+                    style={{ 
+                      width: "50px", 
+                      height: "50px", 
+                      marginRight: "15px",
+                      border: "3px solid #667eea"
+                    }}
                   />
-                  <Button 
-                    variant="light"
-                    className="flex-grow-1 text-start"
+                  <Form.Control
+                    type="text"
+                    placeholder="What's on your mind?"
+                    disabled
                     style={{ 
                       borderRadius: "25px",
                       padding: "10px 20px",
@@ -188,26 +200,28 @@ const Home = () => {
                       border: "1px solid #ddd",
                       color: "#65676b"
                     }}
-                  >
-                    What's on your mind?
-                  </Button>
+                  />
                   <Button
                     style={{ 
                       marginLeft: "10px",
                       borderRadius: "10px",
                       background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-                      border: "none"
+                      border: "none",
+                      padding: "10px 20px"
                     }}
+                    onClick={() => navigate('/createPost')}
                   >
-                    📸 Photo
+                    Create New Post
                   </Button>
                 </div>
               </Card.Body>
             </Card>
 
             {/* Posts Feed */}
-            {posts.map((post) => <FeedPost post={post}/>)}
-              
+            {posts.length>0&&posts.map((post) => (
+              <FeedPost key={post.id} post={post} handleLike={handleLike} />
+            ))}
+
             {/* Load More */}
             <div className="text-center mb-5">
               <Button

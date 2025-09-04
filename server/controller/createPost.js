@@ -1,11 +1,11 @@
 const mongoose = require("mongoose");
 const postModel = require("../models/postModel");
 const userModel = require("../models/userModel");
-const isLoggedIn = require("../middleware/isLoggedIn");
+
 const post = async (req, res) => {
   const { title, content } = req.body;
   const userId = req.user.userId;
- const username=req.user.username;
+  
   try {
     if (!title || !content || !userId) {
       return res
@@ -13,13 +13,19 @@ const post = async (req, res) => {
         .json({ message: "Title, body and userId are required" });
     }
     const userIdObj = new mongoose.Types.ObjectId(userId);
+    
+    // Get user document to access username
+    const user = await userModel.findById(userIdObj);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     const newPost = await postModel.create({
       title,
       content,
       user: userIdObj,
-      username,
+      username: user.username, // Use username from user document
     });
-    const user = await userModel.findById(userIdObj);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }

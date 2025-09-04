@@ -8,16 +8,25 @@ const registerRoute=require('./routes/regisrterRoute');
 const logoutRoute=require('./routes/logoutRoute');
 const createPostRoute=require('./routes/createPostRoute');
 const cookieParser = require('cookie-parser');
-const isLoggedIn = require('./middleware/isLoggedIn');
 const bodyParser=require("body-parser")
 const homeRoute=require("./routes/homeRoute")
-const profileRuote=require("./routes/profileRoute")
+const profileRoute=require("./routes/profileRoute");
+const unlikeRoute = require('./routes/unlikeRoute');
+const likeRoute = require('./routes/likeRoute');
 const PORT = process.env.PORT || 5000;
+
+
+
+
+//Some middlewares
 app.use(express.json());
 app.use(cookieParser())
-app.use(cors())
 app.use(bodyParser.json())
-
+const corsOptions = {
+  origin: 'http://localhost:3000',
+  credentials: true,
+};
+app.use(cors(corsOptions));
 
 
 
@@ -27,9 +36,12 @@ app.use(bodyParser.json())
 
 app.use('/login',loginRoute);
 app.use('/register',registerRoute);
+app.use('/logout',logoutRoute);
+app.use('/home',homeRoute);
+app.use('/profile',profileRoute);
 app.use('/createPost',createPostRoute);
-app.use('/home',homeRoute)
-app.use('/profile',profileRuote)
+app.use('/like', likeRoute);
+app.use('/unlike', unlikeRoute);
 app.get('/',(req,res)=>{
     res.send("API is running....");
 });
