@@ -106,11 +106,11 @@ const Login = () => {
                     {isLoading ? "Signing in..." : "Sign In"}
                   </Button>
 
-                  {/* <div className="text-center">
+                  <div className="text-center">
                     <Link to="/forgot-password" className="text-decoration-none" style={{ color: "#764ba2" }}>
                       Forgot Password?
                     </Link>
-                  </div> */}
+                  </div>
                 </Form>
 
                 <hr className="my-4" />

@@ -22,6 +22,10 @@ trim:true
         required: true,
         trim: true,
     },
+    image: {
+        type: String, // Store base64 image data
+        default: null
+    },
     likes:[ {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',

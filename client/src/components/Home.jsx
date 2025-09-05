@@ -5,112 +5,150 @@ import FeedPost from "./FeedPost";
 
 const Home = () => {
   const navigate = useNavigate();
-  const [posts, setPosts] = useState([
-    // {
-    //   id: 1,
-    //   userId: 1,
-    //   userName: "Sarah Johnson",
-    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah",
-    //   userVerified: true,
-    //   imageUrl: "https://picsum.photos/600/600?random=1",
-    //   caption: "Beautiful sunset at the beach 🌅 Nature never fails to amaze me!",
-    //   likes: 234,
-    //   isLiked: false,
-    //   comments: 12,
-    //   timestamp: "2 hours ago",
-    // },
-    // {
-    //   id: 2,
-    //   userId: 2,
-    //   userName: "Mike Chen",
-    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mike",
-    //   userVerified: false,
-    //   imageUrl: "https://picsum.photos/600/600?random=2",
-    //   caption: "Coffee and code ☕💻 Perfect morning vibes",
-    //   likes: 189,
-    //   isLiked: true,
-    //   comments: 8,
-    //   timestamp: "5 hours ago",
-    // },
-    // {
-    //   id: 3,
-    //   userId: 3,
-    //   userName: "Emma Watson",
-    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Emma",
-    //   userVerified: true,
-    //   imageUrl: "https://picsum.photos/600/600?random=3",
-    //   caption: "Mountain hiking adventures 🏔️ The view was worth every step!",
-    //   likes: 456,
-    //   isLiked: false,
-    //   comments: 23,
-    //   timestamp: "1 day ago",
-    // },
-    // {
-    //   id: 4,
-    //   userId: 4,
-    //   userName: "Alex Rivera",
-    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex",
-    //   userVerified: false,
-    //   imageUrl: "https://picsum.photos/600/600?random=4",
-    //   caption: "City lights at night 🌃 Never gets old",
-    //   likes: 321,
-    //   isLiked: true,
-    //   comments: 15,
-    //   timestamp: "2 days ago",
-    // },
-    // {
-    //   id: 5,
-    //   userId: 5,
-    //   userName: "Lisa Park",
-    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Lisa",
-    //   userVerified: true,
-    //   imageUrl: "https://picsum.photos/600/600?random=5",
-    //   caption: "Weekend vibes 🎉 Making memories with the best people",
-    //   likes: 278,
-    //   isLiked: false,
-    //   comments: 19,
-    //   timestamp: "3 days ago",
-    // },
-    // {
-    //   id: 6,
-    //   userId: 6,
-    //   userName: "Tom Wilson",
-    //   userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Tom",
-    //   userVerified: false,
-    //   imageUrl: "https://picsum.photos/600/600?random=6",
-    //   caption: "Nature photography 📸 Found this hidden gem today",
-    //   likes: 412,
-    //   isLiked: false,
-    //   comments: 31,
-    //   timestamp: "4 days ago",
-    // },
-  ]);
-  useEffect(() => {
-    try{async function fetchPosts() {
-      // Example fetch call - replace with your actual API endpoint
+  const [posts, setPosts] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Helper function to get current user ID from token
+  const getCurrentUserId = () => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.userId;
+      } catch (error) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  // Fetch posts from backend
+  const fetchPosts = async () => {
+    try {
       const response = await fetch('http://localhost:5000/home', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       const data = await response.json();
-      setPosts(data);
+      setPosts(data.posts || data); // Handle both paginated and simple response
+    } catch (err) {
+      console.log(err);
     }
-    fetchPosts();}catch(err){console.log(err)}
-  }, []);
-
-  const handleLike = (postId) => {
-    setPosts(posts.map(post => {
-      if (post.id === postId) {
-        return {
-          ...post,
-          isLiked: !post.isLiked,
-          likes: post.isLiked ? post.likes - 1 : post.likes + 1
-        };
-      }
-      return post;
-    }));
   };
+
+  // Fetch current user data
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/profile', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const data = await response.json();
+      setCurrentUser(data.user);
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  // Generate avatar from username if no avatar available
+  const getCurrentUserAvatar = () => {
+    if (currentUser?.avatar) {
+      return currentUser.avatar;
+    }
+    const username = currentUser?.username || 'User';
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
+  };
+
+  // Handle like/unlike functionality
+  const handleLike = async (postId) => {
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) {
+      console.error('User not authenticated');
+      return;
+    }
+
+    // Find the current post
+    const currentPost = posts.find(post => post._id === postId);
+    if (!currentPost) return;
+
+    const isLiked = currentPost.likes && currentPost.likes.includes(currentUserId);
+    
+    // Optimistic update - update UI immediately
+    setPosts(prevPosts => 
+      prevPosts.map(post => {
+        if (post._id === postId) {
+          if (isLiked) {
+            // Unlike
+            return {
+              ...post,
+              likes: post.likes.filter(id => id !== currentUserId)
+            };
+          } else {
+            // Like
+            return {
+              ...post,
+              likes: [...post.likes, currentUserId]
+            };
+          }
+        }
+        return post;
+      })
+    );
+
+    try {
+      // Make API call
+      const endpoint = isLiked ? `unlike/${postId}` : `like/${postId}`;
+      const response = await fetch(`http://localhost:5000/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update like');
+      }
+
+    } catch (error) {
+      console.error('Like/Unlike error:', error);
+      
+      // Revert optimistic update on error
+      setPosts(prevPosts => 
+        prevPosts.map(post => {
+          if (post._id === postId) {
+            if (isLiked) {
+              // Revert unlike
+              return {
+                ...post,
+                likes: [...post.likes, currentUserId]
+              };
+            } else {
+              // Revert like
+              return {
+                ...post,
+                likes: post.likes.indexOf(id => id !== currentUserId)
+              };
+            }
+          }
+          return post;
+        })
+      );
+    }
+  };
+
+  // Handle delete post functionality
+  const handleDeletePost = (postId) => {
+    // Remove post from UI immediately
+    setPosts(prevPosts => prevPosts.filter(post => post._id !== postId));
+  };
+
+  useEffect(() => {
+    fetchPosts();
+    fetchCurrentUser();
+  }, []);
 
   const handleProfileClick = () => {
     if(!localStorage.getItem("token")) {
@@ -147,7 +185,7 @@ const Home = () => {
             </h2>
             <div className="d-flex align-items-center">
               <Image
-                src="https://api.dicebear.com/7.x/avataaars/svg?seed=CurrentUser"
+                src={getCurrentUserAvatar()}
                 roundedCircle
                 onClick={handleProfileClick}
                 style={{ 
@@ -155,8 +193,10 @@ const Home = () => {
                   height: "40px",
                   marginRight: "15px",
                   cursor: "pointer",
-                  border: "2px solid white"
+                  border: "2px solid white",
+                  objectFit: "cover"
                 }}
+                alt="User Avatar"
               />
               <Button 
                 variant="outline-light"
@@ -180,14 +220,16 @@ const Home = () => {
               <Card.Body className="p-4">
                 <div className="d-flex align-items-center">
                   <Image
-                    src="https://api.dicebear.com/7.x/avataaars/svg?seed=CurrentUser"
+                    src={getCurrentUserAvatar()}
                     roundedCircle
                     style={{ 
                       width: "50px", 
                       height: "50px", 
                       marginRight: "15px",
-                      border: "3px solid #667eea"
+                      border: "3px solid #667eea",
+                      objectFit: "cover"
                     }}
+                    alt="User Avatar"
                   />
                   <Form.Control
                     type="text"
@@ -218,8 +260,13 @@ const Home = () => {
             </Card>
 
             {/* Posts Feed */}
-            {posts.length>0&&posts.map((post) => (
-              <FeedPost key={post.id} post={post} handleLike={handleLike} />
+            {posts.length > 0 && posts.map((post) => (
+              <FeedPost 
+                key={post._id} 
+                post={post} 
+                onLike={handleLike}
+                onDelete={handleDeletePost}
+              />
             ))}
 
             {/* Load More */}

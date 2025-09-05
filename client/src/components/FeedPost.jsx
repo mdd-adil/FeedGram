@@ -43,10 +43,46 @@ export default function FeedPost(props) {
   const currentUserId = getCurrentUserId();
   const isLiked = props.post.likes && props.post.likes.includes(currentUserId);
 
-  const handleLike = (postId) => {
+  const handleLike = async (postId) => {
     if (props.onLike) {
       props.onLike(postId);
     }
+  };
+
+  const handleDelete = async (postId) => {
+    if (window.confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
+        try {
+            const response = await fetch(`http://localhost:5000/deletePost/${postId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                // Call the onDelete prop to update the UI
+                if (props.onDelete) {
+                    props.onDelete(postId);
+                }
+            } else {
+                const errorData = await response.json();
+                alert(errorData.message || 'Failed to delete post');
+            }
+        } catch (error) {
+            console.error('Delete error:', error);
+            alert('Failed to delete post. Please try again.');
+        }
+    }
+  };
+
+  // Generate avatar from username if no avatar available
+  const getAvatarSrc = () => {
+    if (props.post.user?.avatar) {
+      return props.post.user.avatar;
+    }
+    const username = props.post.user?.username || props.post.username || 'User';
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
   };
   
   return (
@@ -62,18 +98,20 @@ export default function FeedPost(props) {
                   {/* Post Header */}
                   <div className="d-flex align-items-center mb-3">
                     <Image
-                      // src={props.post.userAvatar}
+                      src={getAvatarSrc()}
                       roundedCircle
                       style={{ 
                         width: "45px", 
                         height: "45px",
                         marginRight: "12px",
-                        border: "2px solid #667eea"
+                        border: "2px solid #667eea",
+                        objectFit: "cover"
                       }}
+                      alt="User Avatar"
                     />
                     <div className="flex-grow-1">
                       <div className="d-flex align-items-center">
-                        <h6 className="mb-0 fw-bold">{props.post.username}</h6>
+                        <h6 className="mb-0 fw-bold">{props.post.user?.username || props.post.username}</h6>
                         {/* {props.post.userVerified && (
                           <Badge 
                             bg="primary" 
@@ -89,34 +127,47 @@ export default function FeedPost(props) {
                       </div>
                       <small className="text-muted">{timeAgo(props.post.timestamp)}</small>
                     </div>
-                    <Button
-                      variant="light"
-                      size="sm"
-                      style={{ borderRadius: "50%", width: "35px", height: "35px" }}
-                    >
-                      •••
-                    </Button>
+                    {/* Three dots menu - only show for posts owned by current user */}
+                    {(props.post.user?._id === currentUserId || props.post.user === currentUserId) && (
+                      <Button
+                        variant="light"
+                        size="sm"
+                        onClick={() => handleDelete(props.post._id)}
+                        style={{ 
+                          borderRadius: "50%", 
+                          width: "35px", 
+                          height: "35px",
+                          color: "#dc3545"
+                        }}
+                        title="Delete post"
+                      >
+                        🗑️
+                      </Button>
+                    )}
                   </div>
 
                   {/* Post Caption */}
-                  <p className="mb-3">{props.post.title}</p>
+                  <h6 className="mb-2 fw-bold">{props.post.title}</h6>
+                  <p className="mb-3 text-muted">{props.post.content}</p>
 
                   {/* Post Image */}
-                  <div style={{ 
-                    margin: "0 -1.5rem",
-                    marginBottom: "15px"
-                  }}>
-                    <img
-                      // src={props.post.imageUrl}
-                      // alt={props.post.caption}
-                      style={{ 
-                        width: "100%",
-                        height: "auto",
-                        maxHeight: "500px",
-                        objectFit: "cover"
-                      }}
-                    />
-                  </div>
+                  {props.post.image && (
+                    <div style={{ 
+                      margin: "0 -1.5rem",
+                      marginBottom: "15px"
+                    }}>
+                      <img
+                        src={props.post.image}
+                        alt={props.post.title}
+                        style={{ 
+                          width: "100%",
+                          height: "auto",
+                          maxHeight: "500px",
+                          objectFit: "cover"
+                        }}
+                      />
+                    </div>
+                  )}
 
                   {/* Post Stats */}
                   <div className="d-flex justify-content-between align-items-center mb-3 px-2">
@@ -134,7 +185,7 @@ export default function FeedPost(props) {
                       className="flex-grow-1 border-0"
                       onClick={() => handleLike(props.post._id)}
                       style={{ 
-                        background: isLiked 
+                        background: !isLiked 
                           ? "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" 
                           : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                         color: "white",
@@ -144,9 +195,9 @@ export default function FeedPost(props) {
                       }}
                     >
                       <span style={{ fontSize: "20px", marginRight: "5px" }}>
-                        {isLiked ? "❤️" : "🤍"}
+                        {!isLiked ? "❤️" : ""}
                       </span>
-                      {isLiked ? "Liked" : "Like"}
+                      {isLiked ? "Unlike" : "Like"}
                     </Button>
                     {/* <Button
                       variant="light"

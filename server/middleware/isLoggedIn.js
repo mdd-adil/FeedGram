@@ -20,9 +20,8 @@ const isLoggedIn = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.SECRET);
-        console.log('Decoded JWT:', decoded); // Debug log
+       
         req.user = decoded;
-        console.log('req.user set to:', req.user); // Debug log
         next();
     } catch (error) {
         console.error('JWT Verification Error:', error.message);

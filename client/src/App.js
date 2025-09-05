@@ -9,6 +9,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import ProfileEdit from "./components/ProfileEdit";
 import CreatePost from "./components/CreatePost";
 import EditPost from "./components/EditPost";
+import ForgotPassword from "./components/ForgotPassword";
+import ResetPassword from "./components/ResetPassword";
 function App() {
   return (
    <BrowserRouter>
@@ -23,6 +25,8 @@ function App() {
           <Route path="*" element={<Navigate to="/login" />} />
           <Route path='/login' element={<Login />} />
           <Route path='/signup' element={<Register />} />
+          <Route path='/forgot-password' element={<ForgotPassword />} />
+          <Route path='/reset-password/:token' element={<ResetPassword />} />
           
           
         </Routes>

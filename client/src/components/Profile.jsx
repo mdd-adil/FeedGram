@@ -12,6 +12,109 @@ const Profile = () => {
   const [profileData, setProfileData] = useState(null);
   const [error, setError] = useState(null);
   
+  // Helper function to get current user ID from token
+  const getCurrentUserId = () => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.userId;
+      } catch (error) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  // Handle like/unlike functionality
+  const handleLike = async (postId) => {
+    const currentUserId = getCurrentUserId();
+    if (!currentUserId) {
+      console.error('User not authenticated');
+      return;
+    }
+
+    // Find the current post
+    const currentPost = profileData.posts.find(post => post._id === postId);
+    if (!currentPost) return;
+
+    const isLiked = currentPost.likes && currentPost.likes.includes(currentUserId);
+    
+    // Optimistic update - update UI immediately
+    setProfileData(prevData => ({
+      ...prevData,
+      posts: prevData.posts.map(post => {
+        if (post._id === postId) {
+          if (isLiked) {
+            // Unlike
+            return {
+              ...post,
+              likes: post.likes.filter(id => id !== currentUserId)
+            };
+          } else {
+            // Like
+            return {
+              ...post,
+              likes: [...post.likes, currentUserId]
+            };
+          }
+        }
+        return post;
+      })
+    }));
+
+    try {
+      // Make API call
+      const endpoint = isLiked ? `unlike/${postId}` : `like/${postId}`;
+      const response = await fetch(`http://localhost:5000/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update like');
+      }
+
+    } catch (error) {
+      console.error('Like/Unlike error:', error);
+      
+      // Revert optimistic update on error
+      setProfileData(prevData => ({
+        ...prevData,
+        posts: prevData.posts.map(post => {
+          if (post._id === postId) {
+            if (isLiked) {
+              // Revert unlike
+              return {
+                ...post,
+                likes: [...post.likes, currentUserId]
+              };
+            } else {
+              // Revert like
+              return {
+                ...post,
+                likes: post.likes.filter(id => id !== currentUserId)
+              };
+            }
+          }
+          return post;
+        })
+      }));
+    }
+  };
+
+  // Handle delete post functionality
+  const handleDeletePost = (postId) => {
+    // Remove post from UI immediately
+    setProfileData(prevData => ({
+      ...prevData,
+      posts: prevData.posts.filter(post => post._id !== postId)
+    }));
+  };
+  
   useEffect(() => {
     const fetchProfile = async () => {
       const token = localStorage.getItem("token");
@@ -55,7 +158,7 @@ const Profile = () => {
    }
  };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><p className="text-gray-500">Loading profile...</p></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><p className="text-gray-500 text-align-center">Loading profile...</p></div>;
   if (error) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><p className="text-red-500">{error}</p></div>;
   if (!profileData) return <Navigate to="/login" />;
 
@@ -75,11 +178,12 @@ const Profile = () => {
             <h2 className="text-white mb-0 fw-bold">Profile</h2>
             <div>
               <Button 
-                variant="light" 
+                variant="outline-light" 
                 className="me-2"
                 style={{ borderRadius: "20px" }}
+                onClick={() => navigate('/home')}
               >
-                Settings
+               Home
               </Button>
               <Button 
                 variant="outline-light"
@@ -106,10 +210,12 @@ const Profile = () => {
                     style={{ 
                       width: "150px", 
                       height: "150px",
-                      border: "4px solid #667eea"
+                      border: "4px solid #667eea",
+                      objectFit: "cover"
                     }}
+                    alt="Profile Avatar"
                   />
-                  {user.verified && (
+                  {/* {user.verified && (
                     <Badge 
                       bg="primary" 
                       className="position-absolute"
@@ -126,7 +232,7 @@ const Profile = () => {
                     >
                       ✓
                     </Badge>
-                  )}
+                  )} */}
                 </div>
               </Col>
               <Col md={9}>
@@ -162,7 +268,7 @@ const Profile = () => {
                     </div>
                   </div>
                   
-                  <p className="mb-3">{user.bio || "No bio available."}</p>
+               
                   
                   <Row className="text-center text-md-start">
                     <Col xs={4} md={2}>
@@ -197,7 +303,7 @@ const Profile = () => {
           posts.length > 0 ? (
             <Row className="g-3 mb-5">
               {posts.map((post) => (
-                <Post key={post._id} post={post}/>
+                <Post key={post._id} post={post} onLike={handleLike} onDelete={handleDeletePost}/>
               ))}
             </Row>
           ) : (

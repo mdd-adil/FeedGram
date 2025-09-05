@@ -17,11 +17,22 @@ const userSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
-    post:[{
-        type: mongoose.Schema.Types.ObjectId,
+    avatar: {
+        type: String, // Store base64 image data
+        default: null
+    },
+    post: {
+        type: [mongoose.Schema.Types.ObjectId],
         ref: 'Post',
-        default:[]
-        
-    }]
+        default: []
+    },
+    resetPasswordToken: {
+        type: String,
+        default: null
+    },
+    resetPasswordExpires: {
+        type: Date,
+        default: null
+    }
 })
     module.exports = mongoose.model('User', userSchema);

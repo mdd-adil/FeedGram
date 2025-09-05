@@ -1,22 +1,58 @@
-import { useState } from "react";
-import { Container, Row, Col, Card, Button, Form, Image } from "react-bootstrap";
+import { useState, useEffect } from "react";
+import { Container, Row, Col, Card, Button, Form, Image, Alert, Spinner } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 const ProfileEdit = () => {
   const navigate = useNavigate();
   
-  // Mock initial user data
   const [formData, setFormData] = useState({
-    name: "John Doe",
-    username: "johndoe",
-    bio: "Full Stack Developer | Tech Enthusiast | Coffee Lover ☕",
-    email: "john.doe@example.com",
-    website: "https://johndoe.dev",
-    phone: "+1 (555) 123-4567",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=John",
+    username: "",
+    email: "",
+    avatar: ""
   });
 
-  const [avatarPreview, setAvatarPreview] = useState(formData.avatar);
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  // Fetch current user data on component mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        navigate("/login");
+        return;
+      }
+
+      try {
+        const response = await axios.get("http://localhost:5000/profile", {
+          headers: {
+            Authorization: "Bearer " + token,
+          },
+          withCredentials: true
+        });
+
+        const userData = response.data.user;
+        setFormData({
+          username: userData.username || "",
+          email: userData.email || "",
+          avatar: userData.avatar || ""
+        });
+        setAvatarPreview(userData.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=avatar");
+      } catch (error) {
+        console.error("Failed to fetch profile:", error);
+        setError("Failed to load profile data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [navigate]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -29,20 +65,68 @@ const ProfileEdit = () => {
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setError("Please select an image file");
+        return;
+      }
+      
+      // Validate file size (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Image size must be less than 5MB");
+        return;
+      }
+
+      setSelectedFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatarPreview(reader.result);
       };
       reader.readAsDataURL(file);
+      setError(""); // Clear any previous errors
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Here you would typically send the data to your backend
-    console.log("Saving profile data:", formData);
-    // Navigate back to profile after saving
-    navigate("/profile");
+    setSaving(true);
+    setError("");
+    setSuccess("");
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      const formDataToSend = new FormData();
+      formDataToSend.append("username", formData.username);
+      formDataToSend.append("email", formData.email);
+      
+      if (selectedFile) {
+        formDataToSend.append("avatar", selectedFile);
+      }
+
+      const response = await axios.put("http://localhost:5000/updateProfile", formDataToSend, {
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "multipart/form-data",
+        },
+        withCredentials: true
+      });
+
+      setSuccess("Profile updated successfully!");
+      setTimeout(() => {
+        navigate("/profile");
+      }, 1500);
+
+    } catch (error) {
+      console.error("Profile update error:", error);
+      setError(error.response?.data?.message || "Failed to update profile");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -64,6 +148,7 @@ const ProfileEdit = () => {
               variant="outline-light"
               onClick={handleCancel}
               style={{ borderRadius: "20px" }}
+              disabled={saving}
             >
               Cancel
             </Button>
@@ -74,212 +159,165 @@ const ProfileEdit = () => {
       <Container>
         <Row className="justify-content-center">
           <Col lg={8}>
-            <Card className="shadow-sm border-0" style={{ borderRadius: "15px" }}>
-              <Card.Body className="p-4">
-                <Form onSubmit={handleSubmit}>
-                  {/* Avatar Section */}
-                  <div className="text-center mb-4">
-                    <div className="position-relative d-inline-block">
-                      <Image
-                        src={avatarPreview}
-                        roundedCircle
-                        style={{ 
-                          width: "150px", 
-                          height: "150px",
-                          border: "4px solid #667eea",
-                          objectFit: "cover"
-                        }}
-                      />
-                      <label 
-                        htmlFor="avatar-upload"
+            {loading ? (
+              <div className="text-center py-5">
+                <Spinner animation="border" role="status" style={{ color: "#667eea" }}>
+                  <span className="visually-hidden">Loading...</span>
+                </Spinner>
+                <p className="mt-3 text-muted">Loading profile data...</p>
+              </div>
+            ) : (
+              <Card className="shadow-sm border-0" style={{ borderRadius: "15px" }}>
+                <Card.Body className="p-4">
+                  {error && (
+                    <Alert variant="danger" dismissible onClose={() => setError("")}>
+                      {error}
+                    </Alert>
+                  )}
+                  
+                  {success && (
+                    <Alert variant="success" dismissible onClose={() => setSuccess("")}>
+                      {success}
+                    </Alert>
+                  )}
+
+                  <Form onSubmit={handleSubmit}>
+                    {/* Avatar Section */}
+                    <div className="text-center mb-4">
+                      <div className="position-relative d-inline-block">
+                        <Image
+                          src={avatarPreview}
+                          roundedCircle
+                          style={{ 
+                            width: "150px", 
+                            height: "150px",
+                            border: "4px solid #667eea",
+                            objectFit: "cover"
+                          }}
+                          alt="Profile Avatar"
+                        />
+                        <label 
+                          htmlFor="avatar-upload"
+                          style={{
+                            position: "absolute",
+                            bottom: "10px",
+                            right: "10px",
+                            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                            borderRadius: "50%",
+                            width: "40px",
+                            height: "40px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            color: "white",
+                            fontSize: "18px",
+                            boxShadow: "0 2px 10px rgba(0,0,0,0.2)"
+                          }}
+                          title="Click to change profile picture"
+                        >
+                          📷
+                        </label>
+                        <input
+                          id="avatar-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleAvatarChange}
+                          style={{ display: "none" }}
+                        />
+                      </div>
+                      <p className="text-muted mt-2 mb-0">
+                        Click camera icon to change photo (Max 5MB)
+                      </p>
+                      {selectedFile && (
+                        <p className="text-success mt-1 mb-0">
+                          ✓ New image selected: {selectedFile.name}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Form Fields */}
+                    <Row>
+                      <Col md={6} className="mb-3">
+                        <Form.Group>
+                          <Form.Label className="fw-semibold" style={{ color: "#667eea" }}>
+                            Username
+                          </Form.Label>
+                          <Form.Control
+                            type="text"
+                            name="username"
+                            value={formData.username}
+                            onChange={handleInputChange}
+                            style={{ borderRadius: "10px", borderColor: "#e0e0e0" }}
+                            className="shadow-sm"
+                            required
+                          />
+                          <Form.Text className="text-muted">
+                            Your unique @username
+                          </Form.Text>
+                        </Form.Group>
+                      </Col>
+
+                      <Col md={6} className="mb-3">
+                        <Form.Group>
+                          <Form.Label className="fw-semibold" style={{ color: "#667eea" }}>
+                            Email
+                          </Form.Label>
+                          <Form.Control
+                            type="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleInputChange}
+                            style={{ borderRadius: "10px", borderColor: "#e0e0e0" }}
+                            className="shadow-sm"
+                            required
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+
+                    {/* Action Buttons */}
+                    <div className="d-flex justify-content-end gap-3 mt-4">
+                      <Button
+                        variant="outline-secondary"
+                        onClick={handleCancel}
+                        type="button"
+                        style={{ borderRadius: "20px", padding: "10px 30px" }}
+                        disabled={saving}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={saving || !formData.username.trim() || !formData.email.trim()}
                         style={{
-                          position: "absolute",
-                          bottom: "10px",
-                          right: "10px",
                           background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                          borderRadius: "50%",
-                          width: "40px",
-                          height: "40px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          cursor: "pointer",
-                          color: "white",
-                          fontSize: "20px"
+                          border: "none",
+                          borderRadius: "20px",
+                          padding: "10px 30px"
                         }}
                       >
-                        📷
-                      </label>
-                      <input
-                        id="avatar-upload"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleAvatarChange}
-                        style={{ display: "none" }}
-                      />
+                        {saving ? (
+                          <>
+                            <Spinner
+                              as="span"
+                              animation="border"
+                              size="sm"
+                              role="status"
+                              aria-hidden="true"
+                              className="me-2"
+                            />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Changes'
+                        )}
+                      </Button>
                     </div>
-                    <p className="text-muted mt-2 mb-0">Click camera icon to change photo</p>
-                  </div>
-
-                  {/* Form Fields */}
-                  <Row>
-                    <Col md={6} className="mb-3">
-                      <Form.Group>
-                        <Form.Label className="fw-semibold" style={{ color: "#667eea" }}>
-                          Name
-                        </Form.Label>
-                        <Form.Control
-                          type="text"
-                          name="name"
-                          value={formData.name}
-                          onChange={handleInputChange}
-                          style={{ borderRadius: "10px", borderColor: "#e0e0e0" }}
-                          className="shadow-sm"
-                        />
-                      </Form.Group>
-                    </Col>
-
-                    <Col md={6} className="mb-3">
-                      <Form.Group>
-                        <Form.Label className="fw-semibold" style={{ color: "#667eea" }}>
-                          Username
-                        </Form.Label>
-                        <Form.Control
-                          type="text"
-                          name="username"
-                          value={formData.username}
-                          onChange={handleInputChange}
-                          style={{ borderRadius: "10px", borderColor: "#e0e0e0" }}
-                          className="shadow-sm"
-                        />
-                        <Form.Text className="text-muted">
-                          Your unique @username
-                        </Form.Text>
-                      </Form.Group>
-                    </Col>
-                  </Row>
-
-                  <Row>
-                    <Col md={12} className="mb-3">
-                      <Form.Group>
-                        <Form.Label className="fw-semibold" style={{ color: "#667eea" }}>
-                          Bio
-                        </Form.Label>
-                        <Form.Control
-                          as="textarea"
-                          rows={3}
-                          name="bio"
-                          value={formData.bio}
-                          onChange={handleInputChange}
-                          style={{ borderRadius: "10px", borderColor: "#e0e0e0" }}
-                          className="shadow-sm"
-                          maxLength={150}
-                        />
-                        <Form.Text className="text-muted">
-                          {150 - formData.bio.length} characters remaining
-                        </Form.Text>
-                      </Form.Group>
-                    </Col>
-                  </Row>
-
-                  <Row>
-                    <Col md={6} className="mb-3">
-                      <Form.Group>
-                        <Form.Label className="fw-semibold" style={{ color: "#667eea" }}>
-                          Email
-                        </Form.Label>
-                        <Form.Control
-                          type="email"
-                          name="email"
-                          value={formData.email}
-                          onChange={handleInputChange}
-                          style={{ borderRadius: "10px", borderColor: "#e0e0e0" }}
-                          className="shadow-sm"
-                        />
-                      </Form.Group>
-                    </Col>
-                  </Row>
-
-               
-
-                  {/* Privacy Settings */}
-                  {/* <Card className="mb-4" style={{ borderRadius: "10px", background: "#f8f3ff" }}>
-                    <Card.Body>
-                      <h5 className="fw-semibold mb-3" style={{ color: "#764ba2" }}>
-                        Privacy Settings
-                      </h5>
-                      <Form.Check 
-                        type="switch"
-                        id="private-account"
-                        label="Private Account"
-                        className="mb-2"
-                        style={{ fontSize: "16px" }}
-                      />
-                      <Form.Text className="text-muted d-block mb-3">
-                        When your account is private, only people you approve can see your posts
-                      </Form.Text>
-                      
-                      <Form.Check 
-                        type="switch"
-                        id="show-activity"
-                        label="Show Activity Status"
-                        className="mb-2"
-                        style={{ fontSize: "16px" }}
-                      />
-                      <Form.Text className="text-muted d-block">
-                        Allow others to see when you were last active
-                      </Form.Text>
-                    </Card.Body>
-                  </Card> */}
-
-                  {/* Action Buttons */}
-                  <div className="d-flex justify-content-end gap-3">
-                    <Button
-                      variant="outline-secondary"
-                      onClick={handleCancel}
-                      style={{ 
-                        borderRadius: "20px",
-                        padding: "10px 30px",
-                        fontWeight: "600"
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      style={{ 
-                        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                        border: "none",
-                        borderRadius: "20px",
-                        padding: "10px 30px",
-                        fontWeight: "600"
-                      }}
-                    >
-                      Save Changes
-                    </Button>
-                  </div>
-                </Form>
-              </Card.Body>
-            </Card>
-
-            {/* Danger Zone */}
-            <Card className="mt-4 border-danger" style={{ borderRadius: "15px" }}>
-              <Card.Body className="p-4">
-                <h5 className="text-danger fw-semibold mb-3">Danger Zone</h5>
-                <div className="d-flex justify-content-between align-items-center">
-                  <div>
-                    <p className="mb-0 fw-semibold">Delete Account</p>
-                    <small className="text-muted">Once deleted, your account cannot be recovered</small>
-                  </div>
-                  <Button 
-                    variant="outline-danger"
-                    style={{ borderRadius: "20px" }}
-                  >
-                    Delete Account
-                  </Button>
-                </div>
-              </Card.Body>
-            </Card>
+                  </Form>
+                </Card.Body>
+              </Card>
+            )}
           </Col>
         </Row>
       </Container>

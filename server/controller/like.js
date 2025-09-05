@@ -4,15 +4,14 @@ const postModel=require("../models/postModel");
 
 const like=async (req,res)=>{
     const postId=req.params.id;
-    console.log('req.user:', req.user); // Debug log
-    console.log('req.user type:', typeof req.user); // Debug log
+    
     
     if (!req.user) {
         return res.status(401).json({message: "User not authenticated"});
     }
     
     const userId=req.user.userId;
-    console.log('userId extracted:', userId); // Debug log
+   
     try {
         if(!postId || !userId){
             return res.status(400).json({message:"postId and userId are required"});

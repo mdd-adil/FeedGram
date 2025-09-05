@@ -12,6 +12,7 @@ const post = async (req, res) => {
         .status(400)
         .json({ message: "Title, body and userId are required" });
     }
+    
     const userIdObj = new mongoose.Types.ObjectId(userId);
     
     // Get user document to access username
@@ -20,11 +21,19 @@ const post = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Handle image upload
+    let imageData = null;
+    if (req.file) {
+      // Convert buffer to base64
+      imageData = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    }
+
     const newPost = await postModel.create({
       title,
       content,
       user: userIdObj,
-      username: user.username, // Use username from user document
+      username: user.username,
+      image: imageData
     });
     if (!user) {
       return res.status(404).json({ message: "User not found" });

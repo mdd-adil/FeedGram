@@ -1,34 +1,75 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, Form } from 'react-bootstrap';
+import { Button, Card, Form, Alert } from 'react-bootstrap';
 
 const CreatePost = () => {
   const navigate = useNavigate();
-  const [caption, setCaption] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setError("Please select an image file");
+        return;
+      }
+      
+      // Validate file size (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Image size must be less than 5MB");
+        return;
+      }
+
+      setSelectedImage(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result);
       };
       reader.readAsDataURL(file);
+      setError(''); // Clear any previous errors
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
     
-    // Simulate post creation
-    setTimeout(() => {
+    try {
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('content', content);
+      if (selectedImage) {
+        formData.append('image', selectedImage);
+      }
+
+      const response = await fetch('http://localhost:5000/createPost', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create post');
+      }
+
+      const data = await response.json();
       alert('Your post has been created successfully!');
       navigate('/home');
-    }, 1000);
+    } catch (error) {
+      console.error('Error creating post:', error);
+      setError('Failed to create post. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCancel = () => {
@@ -43,14 +84,31 @@ const CreatePost = () => {
         <div className="row justify-content-center">
           <div className="col-md-8">
               <Card className="shadow-lg">
-                <Card.Header className="text-white text-center py-4" style={{
+                <Card.Header className="text-white align-items-center d-flex justify-content-between py-4" style={{
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
                 }}>
                   <h2 className="mb-0">Create New Post</h2>
+                  <Button variant="light" onClick={handleCancel}>❌</Button>
                 </Card.Header>
                 <Card.Body className="p-4">
                   <Form onSubmit={handleSubmit}>
-                    {/* Caption Input */}
+                    {error && <Alert variant="danger">{error}</Alert>}
+                    
+                    {/* Title Input */}
+                    <Form.Group className="mb-4">
+                      <Form.Label className="fw-bold">
+                        Post Title
+                      </Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Enter post title..."
+                        required
+                      />
+                    </Form.Group>
+
+                    {/* Content Input */}
                     <Form.Group className="mb-4">
                       <Form.Label className="fw-bold">
                         What's on your mind?
@@ -58,97 +116,57 @@ const CreatePost = () => {
                       <Form.Control
                         as="textarea"
                         rows={4}
-                        value={caption}
-                        onChange={(e) => setCaption(e.target.value)}
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
                         placeholder="Share your thoughts..."
                         required
                       />
                     </Form.Group>
 
-                    {/* Image Upload */}
+                  {/* Image Upload */}
                     <Form.Group className="mb-4">
                       <Form.Label className="fw-bold">
-                        Add Photo
+                        Add Photo (Optional)
                       </Form.Label>
-                    <div className="d-flex flex-column align-items-center">
-                      {imagePreview && (
-                        <div className="mb-3 w-100">
-                          <img
-                            src={imagePreview}
-                            alt="Preview"
-                            className="img-fluid rounded"
-                            style={{ maxHeight: '400px', width: '100%', objectFit: 'cover' }}
-                          />
-                        </div>
-                      )}
-                      <input
-                        type="file"
-                        id="image"
-                        accept="image/*"
-                        onChange={handleImageChange}
-                        className="form-control"
-                      />
-                    </div>
-                  </Form.Group>
-
-                  {/* Image URL Input */}
-                  <Form.Group className="mb-4">
-                    <Form.Label className="fw-bold">
-                      Or Add Image URL
-                    </Form.Label>
-                    <Form.Control
-                      type="url"
-                      id="imageUrl"
-                      value={imageUrl}
-                      onChange={(e) => {
-                        setImageUrl(e.target.value);
-                        setImagePreview(e.target.value);
-                      }}
-                      placeholder="https://example.com/image.jpg"
-                    />
-                  </Form.Group>
-
-                  {/* Post Settings */}
-                  {/* <Form.Group className="mb-4">
-                    <Form.Label className="fw-bold">Post Settings</Form.Label>
-                    <div className="bg-light p-3 rounded">
-                      <div className="form-check mb-2">
+                      <div className="d-flex flex-column align-items-center">
+                        {imagePreview && (
+                          <div className="mb-3 w-100 position-relative">
+                            <img
+                              src={imagePreview}
+                              alt="Preview"
+                              className="img-fluid rounded"
+                              style={{ maxHeight: '400px', width: '100%', objectFit: 'cover' }}
+                            />
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              className="position-absolute top-0 end-0 m-2"
+                              onClick={() => {
+                                setSelectedImage(null);
+                                setImagePreview('');
+                                document.getElementById('image').value = '';
+                              }}
+                              style={{ borderRadius: "50%" }}
+                            >
+                              ✕
+                            </Button>
+                          </div>
+                        )}
                         <input
-                          type="checkbox"
-                          className="form-check-input"
-                          id="allowComments"
-                          defaultChecked
+                          type="file"
+                          id="image"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          className="form-control"
+                          style={{ borderRadius: "10px" }}
                         />
-                        <label className="form-check-label" htmlFor="allowComments">
-                          Allow comments
-                        </label>
+                        {selectedImage && (
+                          <small className="text-success mt-2">
+                            ✓ Image selected: {selectedImage.name} ({(selectedImage.size / 1024 / 1024).toFixed(2)} MB)
+                          </small>
+                        )}
                       </div>
-                      <div className="form-check mb-2">
-                        <input
-                          type="checkbox"
-                          className="form-check-input"
-                          id="allowSharing"
-                          defaultChecked
-                        />
-                        <label className="form-check-label" htmlFor="allowSharing">
-                          Allow sharing
-                        </label>
-                      </div>
-                    </div>
-                  </Form.Group> */}
-
-                  {/* Visibility */}
-                  {/* <Form.Group className="mb-4">
-                    <Form.Label className="fw-bold">
-                      Who can see this post?
-                    </Form.Label>
-                    <Form.Select id="visibility">
-                      <option value="public">Public</option>
-                      <option value="friends">Friends Only</option>
-                      <option value="private">Only Me</option>
-                    </Form.Select>
-                  </Form.Group> */}
-
+                    </Form.Group>               
                   {/* Action Buttons */}
                   <div className="d-flex gap-3 justify-content-end">
                     <Button
@@ -160,7 +178,7 @@ const CreatePost = () => {
                     </Button>
                     <Button
                       type="submit"
-                      disabled={isLoading || !caption}
+                      disabled={isLoading || !title.trim() || !content.trim()}
                       style={{
                         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                         border: 'none'

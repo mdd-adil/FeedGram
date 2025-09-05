@@ -1,37 +1,67 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Button, Card, Form } from 'react-bootstrap';
+import { Button, Card, Form, Alert } from 'react-bootstrap';
+import axios from 'axios';
 
 const EditPost = () => {
   const navigate = useNavigate();
   const { postId } = useParams();
-  const [caption, setCaption] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [originalPost, setOriginalPost] = useState(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   // Load existing post data
   useEffect(() => {
-    // Simulate fetching post data
-    const mockPost = {
-      id: postId,
-      caption: 'Enjoying a beautiful sunset at the beach! 🌅',
-      image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800',
-      allowComments: true,
-      allowSharing: true,
-      visibility: 'public'
+    const fetchPost = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          navigate('/login');
+          return;
+        }
+
+        const response = await axios.get(`http://localhost:5000/updatePost/${postId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        const post = response.data.post;
+        setOriginalPost(post);
+        setTitle(post.title);
+        setContent(post.content);
+        setImagePreview(post.image);
+      } catch (error) {
+        console.error('Error fetching post:', error);
+        setError(error.response?.data?.message || 'Failed to load post');
+        if (error.response?.status === 401) {
+          navigate('/login');
+        } else if (error.response?.status === 403) {
+          navigate('/home');
+        }
+      }
     };
-    
-    setOriginalPost(mockPost);
-    setCaption(mockPost.caption);
-    setImagePreview(mockPost.image);
-    setImageUrl(mockPost.image);
-  }, [postId]);
+
+    if (postId) {
+      fetchPost();
+    }
+  }, [postId, navigate]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Check file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        setError('File size should be less than 5MB');
+        return;
+      }
+
+      setSelectedFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result);
@@ -43,27 +73,75 @@ const EditPost = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    // Simulate post update
-    setTimeout(() => {
-      alert('Your post has been updated successfully!');
-      navigate('/home');
-    }, 1000);
+    setError('');
+    setSuccess('');
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('content', content);
+      
+      if (selectedFile) {
+        formData.append('image', selectedFile);
+      }
+
+      const response = await axios.put(`http://localhost:5000/updatePost/${postId}`, formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      setSuccess('Post updated successfully!');
+      
+      // Redirect after a short delay
+      setTimeout(() => {
+        navigate('/home');
+      }, 1500);
+
+    } catch (error) {
+      console.error('Error updating post:', error);
+      setError(error.response?.data?.message || 'Failed to update post');
+      if (error.response?.status === 401) {
+        navigate('/login');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCancel = () => {
     navigate('/home');
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
-      // Simulate post deletion
-      alert('Your post has been deleted successfully!');
-      navigate('/home');
+      try {
+        const token = localStorage.getItem('token');
+        await axios.delete(`http://localhost:5000/deletePost/${postId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        setSuccess('Post deleted successfully!');
+        setTimeout(() => {
+          navigate('/home');
+        }, 1000);
+      } catch (error) {
+        console.error('Error deleting post:', error);
+        setError(error.response?.data?.message || 'Failed to delete post');
+      }
     }
   };
 
-  if (!originalPost) {
+  if (!originalPost && !error) {
     return (
       <div className="min-h-screen d-flex align-items-center justify-content-center" style={{
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
@@ -87,17 +165,34 @@ const EditPost = () => {
                 <h2 className="mb-0">Edit Post</h2>
               </Card.Header>
               <Card.Body className="p-4">
+                {error && <Alert variant="danger">{error}</Alert>}
+                {success && <Alert variant="success">{success}</Alert>}
+
                 <Form onSubmit={handleSubmit}>
-                  {/* Caption Input */}
+                  {/* Title Input */}
                   <Form.Group className="mb-4">
                     <Form.Label className="fw-bold">
-                      Update your caption
+                      Post Title
+                    </Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Enter post title..."
+                      required
+                    />
+                  </Form.Group>
+
+                  {/* Content Input */}
+                  <Form.Group className="mb-4">
+                    <Form.Label className="fw-bold">
+                      Post Content
                     </Form.Label>
                     <Form.Control
                       as="textarea"
                       rows={4}
-                      value={caption}
-                      onChange={(e) => setCaption(e.target.value)}
+                      value={content}
+                      onChange={(e) => setContent(e.target.value)}
                       placeholder="Share your thoughts..."
                       required
                     />
@@ -126,69 +221,9 @@ const EditPost = () => {
                         onChange={handleImageChange}
                         className="form-control"
                       />
+                      <small className="text-muted mt-1">Max file size: 5MB</small>
                     </div>
                   </Form.Group>
-
-                  {/* Image URL Input */}
-                  <Form.Group className="mb-4">
-                    <Form.Label className="fw-bold">
-                      Or Update Image URL
-                    </Form.Label>
-                    <Form.Control
-                      type="url"
-                      id="imageUrl"
-                      value={imageUrl}
-                      onChange={(e) => {
-                        setImageUrl(e.target.value);
-                        setImagePreview(e.target.value);
-                      }}
-                      placeholder="https://example.com/image.jpg"
-                    />
-                  </Form.Group>
-
-                  {/* Post Settings */}
-                  {/* <Form.Group className="mb-4">
-                    <Form.Label className="fw-bold">Post Settings</Form.Label>
-                    <div className="bg-light p-3 rounded">
-                      <div className="form-check mb-2">
-                        <input
-                          type="checkbox"
-                          className="form-check-input"
-                          id="allowComments"
-                          defaultChecked={originalPost.allowComments}
-                        />
-                        <label className="form-check-label" htmlFor="allowComments">
-                          Allow comments
-                        </label>
-                      </div>
-                      <div className="form-check mb-2">
-                        <input
-                          type="checkbox"
-                          className="form-check-input"
-                          id="allowSharing"
-                          defaultChecked={originalPost.allowSharing}
-                        />
-                        <label className="form-check-label" htmlFor="allowSharing">
-                          Allow sharing
-                        </label>
-                      </div>
-                    </div>
-                  </Form.Group> */}
-
-                  {/* Visibility */}
-                  {/* <Form.Group className="mb-4">
-                    <Form.Label className="fw-bold">
-                      Who can see this post?
-                    </Form.Label>
-                    <Form.Select 
-                      id="visibility" 
-                      defaultValue={originalPost.visibility}
-                    >
-                      <option value="public">Public</option>
-                      <option value="friends">Friends Only</option>
-                      <option value="private">Only Me</option>
-                    </Form.Select>
-                  </Form.Group> */}
 
                   {/* Action Buttons */}
                   <div className="d-flex gap-3 justify-content-between">
@@ -196,6 +231,7 @@ const EditPost = () => {
                       variant="danger"
                       onClick={handleDelete}
                       type="button"
+                      disabled={isLoading}
                     >
                       Delete Post
                     </Button>
@@ -204,12 +240,13 @@ const EditPost = () => {
                         variant="outline-secondary"
                         onClick={handleCancel}
                         type="button"
+                        disabled={isLoading}
                       >
                         Cancel
                       </Button>
                       <Button
                         type="submit"
-                        disabled={isLoading || !caption}
+                        disabled={isLoading || !title || !content}
                         style={{
                           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                           border: 'none'
