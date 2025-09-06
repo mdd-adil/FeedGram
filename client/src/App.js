@@ -20,20 +20,20 @@ function App() {
    <BrowserRouter>
         <Routes>
           <Route element={<ProtectedRoute/>}>
-          <Route path='/home' element={<Home/>}></Route>
-          <Route path='/profile' element={<Profile />} />
-          <Route path='/user/:userId' element={<UserProfile />} />
-          <Route path='/profile/edit' element={<ProfileEdit />} />
-          <Route path='/createPost' element={<CreatePost />} />
-          <Route path='/editPost/:postId' element={<EditPost />} />
-          <Route path="/chat" element={<Chat />} />
-          <Route path="/chat/:userId" element={<Chat />} />
-          <Route path="*" element={<Navigate to="/home" />} />
+          <Route path='https://feedgram-frontende.onrender.com/home' element={<Home/>}></Route>
+          <Route path='https://feedgram-frontende.onrender.com/profile' element={<Profile />} />
+          <Route path='https://feedgram-frontende.onrender.com/user/:userId' element={<UserProfile />} />
+          <Route path='https://feedgram-frontende.onrender.com/profile/edit' element={<ProfileEdit />} />
+          <Route path='https://feedgram-frontende.onrender.com/createPost' element={<CreatePost />} />
+          <Route path='https://feedgram-frontende.onrender.com/editPost/:postId' element={<EditPost />} />
+          <Route path="https://feedgram-frontende.onrender.com/chat" element={<Chat />} />
+          <Route path="https://feedgram-frontende.onrender.com/chat/:userId" element={<Chat />} />
+          <Route path="*" element={<Navigate to="https://feedgram-frontende.onrender.com/home" />} />
           </Route>
-          <Route path='/login' element={<Login />} />
-          <Route path='/signup' element={<Register />} />
-          <Route path='/forgot-password' element={<ForgotPassword />} />
-          <Route path='/reset-password/:token' element={<ResetPassword />} />
+          <Route path='https://feedgram-frontende.onrender.com/login' element={<Login />} />
+          <Route path='https://feedgram-frontende.onrender.com/signup' element={<Register />} />
+          <Route path='https://feedgram-frontende.onrender.com/forgot-password' element={<ForgotPassword />} />
+          <Route path='https://feedgram-frontende.onrender.com/reset-password/:token' element={<ResetPassword />} />
           
           
         </Routes>
