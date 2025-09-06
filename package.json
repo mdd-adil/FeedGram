@@ -1,9 +1,8 @@
 {
-  "name": "feedgram",
+  "name": "feedgram-monorepo",
   "version": "1.0.0",
-  "scripts": {
-    "build": "npm --prefix client install && npm --prefix client run build",
-    "start": "npm --prefix client start",
-    "install": "npm --prefix client install"
-  }
+  "private": true,
+  "workspaces": [
+    "client"
+  ]
 }
