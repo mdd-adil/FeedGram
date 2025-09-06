@@ -11,11 +11,14 @@
   ],
   "routes": [
     {
+      "handle": "filesystem"
+    },
+    {
       "src": "/(.*)",
-      "dest": "client/$1"
+      "dest": "/index.html"
     }
   ],
-  "buildCommand": "cd client && npm install && npm run build",
+  "buildCommand": "cd client && npm ci && npm run build",
   "outputDirectory": "client/build",
-  "installCommand": "cd client && npm install"
+  "installCommand": "cd client && npm ci"
 }
