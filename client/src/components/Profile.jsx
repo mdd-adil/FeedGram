@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Container, Row, Col, Card, Button, Nav, Image } from "react-bootstrap";
+import { Container, Row, Col, Card, Button, Nav, Image, Alert } from "react-bootstrap";
 import { useNavigate,Navigate } from "react-router-dom";
 import axios from "axios";
 import Post from "./Post";
@@ -14,6 +14,9 @@ const Profile = () => {
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
   const [followRequests, setFollowRequests] = useState([]);
+  const [notification, setNotification] = useState('');
+  const [showNotification, setShowNotification] = useState(false);
+  const [isUnfollowing, setIsUnfollowing] = useState(null); // Track which user is being unfollowed
   
   // Helper function to get current user ID from token
   const getCurrentUserId = () => {
@@ -135,10 +138,15 @@ const Profile = () => {
         }
       }));
       
-      alert(response.data.message);
+      // Show notification instead of alert
+      setNotification(response.data.message);
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 4000);
     } catch (error) {
       console.error('Toggle privacy error:', error);
-      alert('Failed to update privacy setting');
+      setNotification('Failed to update privacy setting');
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 4000);
     }
   };
 
@@ -204,8 +212,16 @@ const Profile = () => {
           pendingRequestsCount: (prevData.user.pendingRequestsCount || 1) - 1
         }
       }));
+
+      // Show success notification
+      setNotification('Follow request accepted');
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
     } catch (error) {
       console.error('Accept follow request error:', error);
+      setNotification('Failed to accept follow request');
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
     }
   };
 
@@ -228,16 +244,27 @@ const Profile = () => {
           pendingRequestsCount: (prevData.user.pendingRequestsCount || 1) - 1
         }
       }));
+
+      // Show success notification
+      setNotification('Follow request rejected');
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
     } catch (error) {
       console.error('Reject follow request error:', error);
+      setNotification('Failed to reject follow request');
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
     }
   };
 
   // Unfollow user
   const unfollowUser = async (userId) => {
+    if (isUnfollowing === userId) return; // Prevent multiple clicks
+    
     try {
+      setIsUnfollowing(userId); // Set loading state for this specific user
       const token = localStorage.getItem('token');
-      await axios.post(`http://localhost:5000/follow/unfollow/${userId}`, {}, {
+      const response = await axios.delete(`http://localhost:5000/follow/unfollow/${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -252,8 +279,18 @@ const Profile = () => {
           followingCount: (prevData.user.followingCount || 0) - 1
         }
       }));
+
+      // Show success notification
+      setNotification('Successfully unfollowed user');
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
     } catch (error) {
       console.error('Unfollow error:', error);
+      setNotification('Failed to unfollow user');
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
+    } finally {
+      setIsUnfollowing(null); // Clear loading state
     }
   };
   
@@ -322,6 +359,24 @@ const Profile = () => {
   
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
+      {/* Notification Alert */}
+      {showNotification && (
+        <Alert 
+          variant={notification.includes('successfully') || notification.includes('now') ? 'success' : 'danger'}
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            zIndex: 9999,
+            minWidth: '300px'
+          }}
+          dismissible
+          onClose={() => setShowNotification(false)}
+        >
+          {notification}
+        </Alert>
+      )}
+
       {/* Header */}
       <div style={{ 
         background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -621,8 +676,9 @@ const Profile = () => {
                         variant="outline-danger"
                         size="sm"
                         onClick={() => unfollowUser(followingUser._id)}
+                        disabled={isUnfollowing === followingUser._id}
                       >
-                        Unfollow
+                        {isUnfollowing === followingUser._id ? 'Unfollowing...' : 'Unfollow'}
                       </Button>
                     </Card.Body>
                   </Card>

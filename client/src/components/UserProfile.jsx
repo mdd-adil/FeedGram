@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Image, Button, Nav, Badge } from 'react-bootstrap';
+import { Container, Row, Col, Card, Image, Button, Nav, Badge, Alert } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Post from './Post';
@@ -16,6 +16,8 @@ const UserProfile = () => {
   const [followRequestSent, setFollowRequestSent] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notification, setNotification] = useState('');
+  const [showNotification, setShowNotification] = useState(false);
 
   // Helper function to get current user ID from token
   const getCurrentUserId = () => {
@@ -121,6 +123,10 @@ const UserProfile = () => {
           ...prev,
           followersCount: (prev.followersCount || 0) - 1
         }));
+        // Show notification
+        setNotification('Successfully unfollowed user');
+        setShowNotification(true);
+        setTimeout(() => setShowNotification(false), 3000);
         // Refresh followers list
         await fetchFollowersAndFollowing();
       } else {
@@ -131,19 +137,27 @@ const UserProfile = () => {
         
         if (user.isPrivate) {
           setFollowRequestSent(true);
+          setNotification('Follow request sent to private account');
+          setShowNotification(true);
+          setTimeout(() => setShowNotification(false), 3000);
         } else {
           setIsFollowing(true);
           setUser(prev => ({
             ...prev,
             followersCount: (prev.followersCount || 0) + 1
           }));
+          setNotification('Successfully followed user');
+          setShowNotification(true);
+          setTimeout(() => setShowNotification(false), 3000);
           // Refresh followers list
           await fetchFollowersAndFollowing();
         }
       }
     } catch (error) {
       console.error('Error following/unfollowing user:', error);
-      setError('Error updating follow status');
+      setNotification('Error updating follow status');
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
     }
   };
 
@@ -219,6 +233,24 @@ const UserProfile = () => {
 
   return (
     <Container className="py-5">
+      {/* Notification Alert */}
+      {showNotification && (
+        <Alert 
+          variant={notification.includes('Successfully') || notification.includes('sent') ? 'success' : 'danger'}
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            zIndex: 9999,
+            minWidth: '300px'
+          }}
+          dismissible
+          onClose={() => setShowNotification(false)}
+        >
+          {notification}
+        </Alert>
+      )}
+
       {/* Back Button */}
       <Row className="justify-content-center mb-3">
         <Col md={8}>

@@ -209,12 +209,21 @@ const toggleAccountPrivacy = async (req, res) => {
         const currentUserId = req.user.userId;
         const currentUser = await userModel.findById(currentUserId);
 
+        const previousPrivacy = currentUser.isPrivate;
         currentUser.isPrivate = !currentUser.isPrivate;
         await currentUser.save();
 
+        let message;
+        if (currentUser.isPrivate) {
+            message = 'Account is now private. Only your followers can see your posts.';
+        } else {
+            message = 'Account is now public. Anyone can see your posts.';
+        }
+
         res.status(200).json({ 
-            message: `Account is now ${currentUser.isPrivate ? 'private' : 'public'}`,
-            isPrivate: currentUser.isPrivate
+            message: message,
+            isPrivate: currentUser.isPrivate,
+            previousPrivacy: previousPrivacy
         });
     } catch (error) {
         console.error('Toggle privacy error:', error);

@@ -261,7 +261,7 @@ const Home = () => {
           <div className="d-flex justify-content-between align-items-center">
             <h2 className="text-white mb-0 fw-bold d-flex align-items-center">
               <span style={{ fontSize: "30px", marginRight: "10px" }}>🌟</span>
-              Social Feed
+              FeedGram
             </h2>
             
             {/* Search Bar */}
