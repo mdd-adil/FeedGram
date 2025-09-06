@@ -4,14 +4,18 @@ const postModel = require('../models/postModel');
 const profile = async (req, res) => {
     const userId = req.user.userId;
     try {
-        const user = await userModel.findById(userId).populate({
-            path: 'post',
-            populate: {
-                path: 'user',
-                model: 'User',
-                select: 'username avatar' // Selects only necessary fields
-            }
-        });
+        const user = await userModel.findById(userId)
+            .populate('followers', 'username avatar')
+            .populate('following', 'username avatar')
+            .populate('pendingFollowRequests', 'username avatar')
+            .populate({
+                path: 'post',
+                populate: {
+                    path: 'user',
+                    model: 'User',
+                    select: 'username avatar' // Selects only necessary fields
+                }
+            });
         
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
@@ -23,7 +27,12 @@ const profile = async (req, res) => {
         // Combine the user and posts data into a single, clean response
         return res.status(200).json({
             message: 'Profile retrieved successfully',
-            user: user,
+            user: {
+                ...user.toObject(),
+                followersCount: user.followers.length,
+                followingCount: user.following.length,
+                pendingRequestsCount: user.pendingFollowRequests.length
+            },
             posts: posts
         });
     } catch (error) {

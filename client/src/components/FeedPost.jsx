@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {  Card, Button, Image, Alert, Modal } from "react-bootstrap";
+import { useNavigate } from 'react-router-dom';
 
 // Function to format timestamp to "time ago"
 export const timeAgo = (timestamp) => {
@@ -26,9 +27,13 @@ export const timeAgo = (timestamp) => {
 };
 
 export default function FeedPost(props) {
+  const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteNotification, setDeleteNotification] = useState('');
   const [showNotification, setShowNotification] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followRequestSent, setFollowRequestSent] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   const getCurrentUserId = () => {
     // You can decode the JWT token or store userId separately
@@ -46,6 +51,112 @@ export default function FeedPost(props) {
 
   const currentUserId = getCurrentUserId();
   const isLiked = props.post.likes && props.post.likes.includes(currentUserId);
+
+  // Check follow status when component mounts
+  useEffect(() => {
+    const checkFollowStatus = async () => {
+      const postUserId = props.post.user?._id || props.post.user;
+      if (postUserId && postUserId !== currentUserId) {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await fetch(`http://localhost:5000/user-profile/${postUserId}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            setIsFollowing(data.isFollowing || false);
+            // Check if there's a pending follow request by looking at the user's data
+            setFollowRequestSent(false); // We'll determine this from the response
+          } else {
+            console.log('Failed to check follow status');
+          }
+        } catch (error) {
+          console.error('Error checking follow status:', error);
+          // Set default states on error
+          setIsFollowing(false);
+          setFollowRequestSent(false);
+        }
+      }
+    };
+
+    checkFollowStatus();
+  }, [props.post.user, currentUserId]);
+
+  const handleFollow = async (userId) => {
+    if (followLoading) return;
+    
+    try {
+      setFollowLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/follow/follow/${userId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.message && result.message.includes('request sent')) {
+          setFollowRequestSent(true);
+          setDeleteNotification('Follow request sent!');
+        } else {
+          setIsFollowing(true);
+          setDeleteNotification('Successfully followed!');
+        }
+        setShowNotification(true);
+        setTimeout(() => setShowNotification(false), 3000);
+      } else {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to follow user' }));
+        throw new Error(errorData.message || 'Failed to follow user');
+      }
+    } catch (error) {
+      console.error('Follow error:', error);
+      setDeleteNotification(error.message || 'Failed to follow user');
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const handleUnfollow = async (userId) => {
+    if (followLoading) return;
+    
+    try {
+      setFollowLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/follow/unfollow/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        setIsFollowing(false);
+        setFollowRequestSent(false);
+        setDeleteNotification('Successfully unfollowed!');
+        setShowNotification(true);
+        setTimeout(() => setShowNotification(false), 3000);
+      } else {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to unfollow user' }));
+        throw new Error(errorData.message || 'Failed to unfollow user');
+      }
+    } catch (error) {
+      console.error('Unfollow error:', error);
+      setDeleteNotification(error.message || 'Failed to unfollow user');
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   const handleLike = async (postId) => {
     if (props.onLike) {
@@ -102,8 +213,8 @@ export default function FeedPost(props) {
 
   // Generate avatar from username if no avatar available
   const getAvatarSrc = () => {
-    console.log('Post data:', props.post);
-    console.log('User data:', props.post.user);
+    // console.log('Post data:', props.post);
+    // console.log('User data:', props.post.user);
     if (props.post.user?.avatar) {
       return props.post.user.avatar;
     }
@@ -168,13 +279,61 @@ export default function FeedPost(props) {
                 height: "45px",
                 marginRight: "12px",
                 border: "2px solid #667eea",
-                objectFit: "cover"
+                objectFit: "cover",
+                cursor: "pointer"
               }}
               alt="User Avatar"
+              onClick={() => navigate(`/user/${props.post.user?._id || props.post.user}`)}
             />
             <div className="flex-grow-1">
-              <div className="d-flex align-items-center">
-                <h6 className="mb-0 fw-bold">{props.post.user?.username || props.post.username}</h6>
+              <div className="d-flex align-items-center justify-content-between">
+                <h6 
+                  className="mb-0 fw-bold" 
+                  style={{ cursor: "pointer", color: "#667eea" }}
+                  onClick={() => navigate(`/user/${props.post.user?._id || props.post.user}`)}
+                >
+                  {props.post.user?.username || props.post.username}
+                </h6>
+                {/* Follow button for other users */}
+                {(props.post.user?._id !== currentUserId && props.post.user !== currentUserId) && (
+                  <div className="ms-2">
+                    {isFollowing ? (
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        onClick={() => handleUnfollow(props.post.user?._id || props.post.user)}
+                        disabled={followLoading}
+                        style={{ borderRadius: "15px", fontSize: "17px", padding: "2px 8px" }}
+                      >
+                        {followLoading ? 'Loading...' : 'Unfollow'}
+                      </Button>
+                    ) : followRequestSent ? (
+                      <Button
+                        variant="outline-secondary"
+                        size="sm"
+                        disabled
+                        style={{ borderRadius: "15px", fontSize: "17px", padding: "2px 8px" }}
+                      >
+                        Requested
+                      </Button>
+                    ) : (
+                      <Button
+                        style={{
+                          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                          border: "none",
+                          borderRadius: "15px",
+                          fontSize: "17px",
+                          padding: "2px 8px"
+                        }}
+                        size="sm"
+                        onClick={() => handleFollow(props.post.user?._id || props.post.user)}
+                        disabled={followLoading}
+                      >
+                        {followLoading ? 'Loading...' : 'Follow'}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
               <small className="text-muted">{timeAgo(props.post.timestamp)}</small>
             </div>

@@ -73,7 +73,7 @@ const CreatePost = () => {
   };
 
   const handleCancel = () => {
-    navigate('/home');
+    navigate(-1);
   };
 
   return (

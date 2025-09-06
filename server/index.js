@@ -30,6 +30,9 @@ const updatePostRoute = require('./routes/updatePostRoute');
 const chatRoute = require('./routes/chatRoute');
 const { sendMessage } = require('./controller/chat');
 const jwt = require('jsonwebtoken');
+const UserProfile = require('./routes/userProfileRoute');
+const followRoute = require('./routes/followRoute');
+const searchRoute = require('./routes/searchRoute');
 const PORT = process.env.PORT || 5000;
 
 
@@ -65,12 +68,15 @@ app.use('/updatePost', updatePostRoute);
 app.use('/chat', chatRoute);
 app.use('/forgot-password', forgotPasswordRoute);
 app.use('/reset-password', resetPasswordRoute);
+app.use('/user-profile', UserProfile);
+app.use('/follow', followRoute);
+app.use('/search', searchRoute);
 
 // Socket.io connection handling
 const connectedUsers = new Map();
 
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  // console.log('User connected:', socket.id);
 
   // Authenticate user and store connection
   socket.on('authenticate', (token) => {
@@ -78,7 +84,7 @@ io.on('connection', (socket) => {
       const decoded = jwt.verify(token, process.env.SECRET);
       socket.userId = decoded.userId;
       connectedUsers.set(decoded.userId, socket.id);
-      console.log(`User ${decoded.userId} authenticated and connected`);
+      // console.log(`User ${decoded.userId} authenticated and connected`);
       
       // Send authentication success confirmation
       socket.emit('authSuccess', { userId: decoded.userId });
@@ -95,7 +101,7 @@ io.on('connection', (socket) => {
       return;
     }
     socket.join(chatId);
-    console.log(`User ${socket.userId} joined chat ${chatId}`);
+    // console.log(`User ${socket.userId} joined chat ${chatId}`);
   });
 
   // Handle sending messages

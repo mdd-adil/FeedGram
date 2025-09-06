@@ -11,6 +11,9 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState(null);
   const [error, setError] = useState(null);
+  const [followers, setFollowers] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [followRequests, setFollowRequests] = useState([]);
   
   // Helper function to get current user ID from token
   const getCurrentUserId = () => {
@@ -114,6 +117,145 @@ const Profile = () => {
       posts: prevData.posts.filter(post => post._id !== postId)
     }));
   };
+
+  // Toggle account privacy
+  const togglePrivacy = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.patch('http://localhost:5000/follow/privacy/toggle', {}, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      // Update the profile data
+      setProfileData(prevData => ({
+        ...prevData,
+        user: {
+          ...prevData.user,
+          isPrivate: response.data.isPrivate
+        }
+      }));
+      
+      alert(response.data.message);
+    } catch (error) {
+      console.error('Toggle privacy error:', error);
+      alert('Failed to update privacy setting');
+    }
+  };
+
+  // Fetch followers
+  const fetchFollowers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const userId = getCurrentUserId();
+      const response = await axios.get(`http://localhost:5000/follow/followers/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setFollowers(response.data.followers);
+    } catch (error) {
+      console.error('Fetch followers error:', error);
+    }
+  };
+
+  // Fetch following
+  const fetchFollowing = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const userId = getCurrentUserId();
+      const response = await axios.get(`http://localhost:5000/follow/following/${userId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setFollowing(response.data.following);
+    } catch (error) {
+      console.error('Fetch following error:', error);
+    }
+  };
+
+  // Fetch follow requests
+  const fetchFollowRequests = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://localhost:5000/follow/requests', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setFollowRequests(response.data.requests);
+    } catch (error) {
+      console.error('Fetch follow requests error:', error);
+    }
+  };
+
+  // Accept follow request
+  const acceptFollowRequest = async (requesterId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:5000/follow/accept/${requesterId}`, {}, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      // Remove from requests and refresh data
+      setFollowRequests(prev => prev.filter(req => req._id !== requesterId));
+      fetchFollowers();
+      
+      // Update profile data
+      setProfileData(prevData => ({
+        ...prevData,
+        user: {
+          ...prevData.user,
+          followersCount: (prevData.user.followersCount || 0) + 1,
+          pendingRequestsCount: (prevData.user.pendingRequestsCount || 1) - 1
+        }
+      }));
+    } catch (error) {
+      console.error('Accept follow request error:', error);
+    }
+  };
+
+  // Reject follow request
+  const rejectFollowRequest = async (requesterId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://localhost:5000/follow/reject/${requesterId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      // Remove from requests
+      setFollowRequests(prev => prev.filter(req => req._id !== requesterId));
+      
+      // Update profile data
+      setProfileData(prevData => ({
+        ...prevData,
+        user: {
+          ...prevData.user,
+          pendingRequestsCount: (prevData.user.pendingRequestsCount || 1) - 1
+        }
+      }));
+    } catch (error) {
+      console.error('Reject follow request error:', error);
+    }
+  };
+
+  // Unfollow user
+  const unfollowUser = async (userId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`http://localhost:5000/follow/unfollow/${userId}`, {}, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      // Remove from following list
+      setFollowing(prev => prev.filter(user => user._id !== userId));
+      
+      // Update profile data
+      setProfileData(prevData => ({
+        ...prevData,
+        user: {
+          ...prevData.user,
+          followingCount: (prevData.user.followingCount || 0) - 1
+        }
+      }));
+    } catch (error) {
+      console.error('Unfollow error:', error);
+    }
+  };
   
   useEffect(() => {
     const fetchProfile = async () => {
@@ -140,6 +282,19 @@ const Profile = () => {
     };
     fetchProfile();
   }, [navigate]);
+
+  // Fetch data based on active tab
+  useEffect(() => {
+    if (profileData) {
+      if (activeTab === "followers") {
+        fetchFollowers();
+      } else if (activeTab === "following") {
+        fetchFollowing();
+      } else if (activeTab === "requests") {
+        fetchFollowRequests();
+      }
+    }
+  }, [activeTab, profileData]);
 
  const handleLogout = async () => {
    try {
@@ -259,6 +414,14 @@ const Profile = () => {
                       >
                         Edit Profile
                       </Button>
+                      <Button 
+                        variant={!user.isPrivate ? "warning" : "success"}
+                        style={{ borderRadius: "20px", padding: "8px 20px" }}
+                        className="me-2"
+                        onClick={togglePrivacy}
+                      >
+                        {!user.isPrivate ? '🔒 Private' : '🌍 Public'}
+                      </Button>
                       {/* <Button 
                         variant="outline-secondary"
                         style={{ borderRadius: "20px", padding: "8px 30px" }}
@@ -275,7 +438,27 @@ const Profile = () => {
                       <h5 className="fw-bold mb-0" style={{ color: "#667eea" }}>{posts.length}</h5>
                       <small className="text-muted">Posts</small>
                     </Col>
+                    <Col xs={4} md={2}>
+                      <h5 className="fw-bold mb-0" style={{ color: "#667eea" }}>{user.followersCount || 0}</h5>
+                      <small className="text-muted">Followers</small>
+                    </Col>
+                    <Col xs={4} md={2}>
+                      <h5 className="fw-bold mb-0" style={{ color: "#667eea" }}>{user.followingCount || 0}</h5>
+                      <small className="text-muted">Following</small>
+                    </Col>
                   </Row>
+                  
+                  {/* Privacy Status */}
+                  <div className="mt-3">
+                    <span className={`badge ${user.isPrivate ? 'bg-warning' : 'bg-success'}`}>
+                      {user.isPrivate ? '🔒 Private Account' : '🌍 Public Account'}
+                    </span>
+                    {user.pendingRequestsCount > 0 && (
+                      <span className="badge bg-info ms-2">
+                        {user.pendingRequestsCount} Follow Request{user.pendingRequestsCount > 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </Col>
             </Row>
@@ -297,9 +480,51 @@ const Profile = () => {
               📷 Posts
             </Nav.Link>
           </Nav.Item>
+          <Nav.Item>
+            <Nav.Link 
+              active={activeTab === "followers"}
+              onClick={() => setActiveTab("followers")}
+              style={{ 
+                color: activeTab === "followers" ? "#667eea" : "#6c757d",
+                borderBottom: activeTab === "followers" ? "2px solid #667eea" : "none",
+                fontWeight: activeTab === "followers" ? "600" : "normal"
+              }}
+            >
+              👥 Followers ({user.followersCount || 0})
+            </Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link 
+              active={activeTab === "following"}
+              onClick={() => setActiveTab("following")}
+              style={{ 
+                color: activeTab === "following" ? "#667eea" : "#6c757d",
+                borderBottom: activeTab === "following" ? "2px solid #667eea" : "none",
+                fontWeight: activeTab === "following" ? "600" : "normal"
+              }}
+            >
+              ➡️ Following ({user.followingCount || 0})
+            </Nav.Link>
+          </Nav.Item>
+          {user.pendingRequestsCount > 0 && (
+            <Nav.Item>
+              <Nav.Link 
+                active={activeTab === "requests"}
+                onClick={() => setActiveTab("requests")}
+                style={{ 
+                  color: activeTab === "requests" ? "#667eea" : "#6c757d",
+                  borderBottom: activeTab === "requests" ? "2px solid #667eea" : "none",
+                  fontWeight: activeTab === "requests" ? "600" : "normal"
+                }}
+              >
+                🔔 Requests ({user.pendingRequestsCount})
+              </Nav.Link>
+            </Nav.Item>
+          )}
         </Nav>
 
-        {
+        {/* Tab Content */}
+        {activeTab === "posts" && (
           posts.length > 0 ? (
             <Row className="g-3 mb-5">
               {posts.map((post) => (
@@ -323,7 +548,146 @@ const Profile = () => {
                       </Button>
                       </div>
           )
-        }
+        )}
+
+        {activeTab === "followers" && (
+          <Row className="g-3 mb-5">
+            {followers.length > 0 ? (
+              followers.map((follower) => (
+                <Col key={follower._id} md={6} lg={4}>
+                  <Card className="h-100 shadow-sm border-0" style={{ borderRadius: "15px" }}>
+                    <Card.Body className="d-flex align-items-center p-3">
+                      <Image
+                        src={follower.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=avatar"}
+                        roundedCircle
+                        style={{ width: "50px", height: "50px", objectFit: "cover", cursor: "pointer" }}
+                        className="me-3"
+                        onClick={() => navigate(`/user/${follower._id}`)}
+                      />
+                      <div className="flex-grow-1">
+                        <h6 
+                          className="mb-0" 
+                          style={{ cursor: "pointer", color: "#667eea" }}
+                          onClick={() => navigate(`/user/${follower._id}`)}
+                        >
+                          {follower.username}
+                        </h6>
+                        <small className="text-muted">Follower</small>
+                      </div>
+                      <Button
+                        variant="outline-primary"
+                        size="sm"
+                        onClick={() => navigate(`/user/${follower._id}`)}
+                      >
+                        View
+                      </Button>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              ))
+            ) : (
+              <div className="text-center my-5">
+                <p className="text-muted">No followers yet</p>
+              </div>
+            )}
+          </Row>
+        )}
+
+        {activeTab === "following" && (
+          <Row className="g-3 mb-5">
+            {following.length > 0 ? (
+              following.map((followingUser) => (
+                <Col key={followingUser._id} md={6} lg={4}>
+                  <Card className="h-100 shadow-sm border-0" style={{ borderRadius: "15px" }}>
+                    <Card.Body className="d-flex align-items-center p-3">
+                      <Image
+                        src={followingUser.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=avatar"}
+                        roundedCircle
+                        style={{ width: "50px", height: "50px", objectFit: "cover", cursor: "pointer" }}
+                        className="me-3"
+                        onClick={() => navigate(`/user/${followingUser._id}`)}
+                      />
+                      <div className="flex-grow-1">
+                        <h6 
+                          className="mb-0" 
+                          style={{ cursor: "pointer", color: "#667eea" }}
+                          onClick={() => navigate(`/user/${followingUser._id}`)}
+                        >
+                          {followingUser.username}
+                        </h6>
+                        <small className="text-muted">Following</small>
+                      </div>
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        onClick={() => unfollowUser(followingUser._id)}
+                      >
+                        Unfollow
+                      </Button>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              ))
+            ) : (
+              <div className="text-center my-5">
+                <p className="text-muted">Not following anyone yet</p>
+              </div>
+            )}
+          </Row>
+        )}
+
+        {activeTab === "requests" && (
+          <Row className="g-3 mb-5">
+            {followRequests.length > 0 ? (
+              followRequests.map((request) => (
+                <Col key={request._id} md={6} lg={4}>
+                  <Card className="h-100 shadow-sm border-0" style={{ borderRadius: "15px" }}>
+                    <Card.Body className="d-flex align-items-center p-3">
+                      <Image
+                        src={request.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=avatar"}
+                        roundedCircle
+                        style={{ width: "50px", height: "50px", objectFit: "cover", cursor: "pointer" }}
+                        className="me-3"
+                        onClick={() => navigate(`/user/${request._id}`)}
+                      />
+                      <div className="flex-grow-1">
+                        <h6 
+                          className="mb-0" 
+                          style={{ cursor: "pointer", color: "#667eea" }}
+                          onClick={() => navigate(`/user/${request._id}`)}
+                        >
+                          {request.username}
+                        </h6>
+                        <small className="text-muted">Wants to follow you</small>
+                      </div>
+                      <div>
+                        <Button
+                          variant="success"
+                          size="sm"
+                          className="me-2"
+                          onClick={() => acceptFollowRequest(request._id)}
+                        >
+                          Accept
+                        </Button>
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          onClick={() => rejectFollowRequest(request._id)}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              ))
+            ) : (
+              <div className="text-center my-5">
+                <p className="text-muted">No pending follow requests</p>
+              </div>
+            )}
+          </Row>
+        )}
       </Container>
     </div>
   );

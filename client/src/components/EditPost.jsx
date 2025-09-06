@@ -117,7 +117,7 @@ const EditPost = () => {
   };
 
   const handleCancel = () => {
-    navigate('/profile');
+    navigate(-1);
   };
 
   const handleDelete = async () => {

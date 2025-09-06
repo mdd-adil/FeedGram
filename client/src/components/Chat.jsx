@@ -52,7 +52,7 @@ const Chat = () => {
 
     // Handle authentication success
     newSocket.on('authSuccess', (data) => {
-      console.log('Authentication successful:', data);
+    //   console.log('Authentication successful:', data);
       setIsAuthenticated(true);
     });
 
@@ -249,7 +249,7 @@ const Chat = () => {
       padding: "20px"
     }}>
       <Container fluid>
-        <Row className="h-100">
+        <Row className="min-h-100">
           {/* Sidebar - Users List */}
           <Col md={4} lg={3} className="pe-0">
             <Card className="h-100 shadow-lg border-0" style={{ borderRadius: "15px" }}>

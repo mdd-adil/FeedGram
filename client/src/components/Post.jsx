@@ -175,12 +175,13 @@ export default function Post({post, onLike, onDelete}) {
                             </div>
                             
                             {/* Delete button */}
-                            <Button
-                                variant="outline-danger"
-                                size="sm"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    confirmDelete();
+                            {currentUserId===post.userId && (
+                                <Button
+                                    variant="outline-danger"
+                                    size="sm"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        confirmDelete();
                                 }}
                                 style={{ 
                                     borderRadius: "50%", 
@@ -192,7 +193,7 @@ export default function Post({post, onLike, onDelete}) {
                                 title="Delete post"
                             >
                                 🗑️
-                            </Button>
+                            </Button>)}
                         </div>
 
                         {/* Post stats and actions */}

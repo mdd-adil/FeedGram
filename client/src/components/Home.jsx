@@ -7,6 +7,11 @@ const Home = () => {
   const navigate = useNavigate();
   const [posts, setPosts] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchTimeout, setSearchTimeout] = useState(null);
 
   // Helper function to get current user ID from token
   const getCurrentUserId = () => {
@@ -52,13 +57,64 @@ const Home = () => {
     }
   };
 
+  // Search for users by username
+  const searchUsers = async (query) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    try {
+      setSearchLoading(true);
+      const response = await fetch(`http://localhost:5000/search/users?q=${encodeURIComponent(query)}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const data = await response.json();
+      setSearchResults(data.users || []);
+      setShowSearchResults(true);
+    } catch (err) {
+      console.error('Search error:', err);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    
+    // Clear existing timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    // Set new timeout for debouncing
+    const newTimeout = setTimeout(() => {
+      searchUsers(query);
+    }, 300);
+    
+    setSearchTimeout(newTimeout);
+  };
+
+  // Handle clicking on a search result
+  const handleSearchResultClick = (userId) => {
+    navigate(`/user/${userId}`);
+    setSearchQuery('');
+    setShowSearchResults(false);
+  };
+
   // Generate avatar from username if no avatar available
   const getCurrentUserAvatar = () => {
     if (currentUser?.avatar) {
       return currentUser.avatar;
     }
     const username = currentUser?.username || 'User';
-    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
+    return `https:/.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
   };
 
   // Handle like/unlike functionality
@@ -150,6 +206,20 @@ const Home = () => {
     fetchCurrentUser();
   }, []);
 
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.search-container')) {
+        setShowSearchResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const handleProfileClick = () => {
     if(!localStorage.getItem("token")) {
       navigate("/login");
@@ -170,6 +240,16 @@ const Home = () => {
 
   return (
     <div style={{ minHeight: "100vh", background: "#f0f2f5" }}>
+      <style>
+        {`
+          .search-container input::placeholder {
+            color: rgba(255, 255, 255, 0.7) !important;
+          }
+          .search-result-item:hover {
+            background-color: #f8f9fa !important;
+          }
+        `}
+      </style>
       {/* Header */}
       <div style={{ 
         background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -183,6 +263,98 @@ const Home = () => {
               <span style={{ fontSize: "30px", marginRight: "10px" }}>🌟</span>
               Social Feed
             </h2>
+            
+            {/* Search Bar */}
+            <div className="position-relative mx-3 search-container" style={{ flex: 1, maxWidth: "400px" }}>
+              <Form.Control
+                type="text"
+                placeholder="Search for users..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                style={{
+                  borderRadius: "25px",
+                  padding: "8px 20px",
+                  border: "2px solid rgba(255,255,255,0.3)",
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  color: "white",
+                  fontSize: "14px"
+                }}
+                className="text-white"
+                onFocus={(e) => e.target.style.backgroundColor = "rgba(255,255,255,0.2)"}
+                onBlur={(e) => e.target.style.backgroundColor = "rgba(255,255,255,0.1)"}
+              />
+              <div 
+                style={{
+                  position: "absolute",
+                  right: "15px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "rgba(255,255,255,0.7)"
+                }}
+              >
+                🔍
+              </div>
+              
+              {/* Search Results Dropdown */}
+              {showSearchResults && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    backgroundColor: "white",
+                    borderRadius: "10px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                    zIndex: 1000,
+                    maxHeight: "300px",
+                    overflowY: "auto",
+                    marginTop: "5px"
+                  }}
+                >
+                  {searchLoading ? (
+                    <div className="text-center p-3">
+                      <div className="spinner-border spinner-border-sm" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                      </div>
+                    </div>
+                  ) : searchResults.length > 0 ? (
+                    searchResults.map((user) => (
+                      <div
+                        key={user._id}
+                        onClick={() => handleSearchResultClick(user._id)}
+                        className="search-result-item"
+                        style={{
+                          padding: "10px 15px",
+                          borderBottom: "1px solid #f0f0f0",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          transition: "background-color 0.2s"
+                        }}
+                      >
+                        <Image
+                          src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.username)}`}
+                          roundedCircle
+                          style={{ width: "35px", height: "35px", marginRight: "10px", objectFit: "cover" }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: "600", color: "#333" }}>{user.username}</div>
+                          {user.isPrivate && (
+                            <small style={{ color: "#666" }}>🔒 Private Account</small>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : searchQuery.trim() && (
+                    <div className="text-center p-3 text-muted">
+                      No users found for "{searchQuery}"
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
             <div className="d-flex align-items-center">
               <Image
                 src={getCurrentUserAvatar()}
