@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Container, Form, Button, Card, Alert } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import axios from 'axios';
+import API_BASE_URL from '../config/api';
 
 
 
@@ -18,7 +19,7 @@ const Login = () => {
     e.preventDefault();
     try {
       // Send the form data to the backend API
-      const response = await axios.post('http://localhost:5000/login',{"email":email,"password":password});
+      const response = await axios.post(`${API_BASE_URL}/login`,{"email":email,"password":password});
       // setError(response.data.message);
       // Store the JWT token, typically in localStorage or a cookielocal
       // console.log(response.data)

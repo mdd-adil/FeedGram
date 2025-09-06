@@ -30,7 +30,7 @@ const Home = () => {
   // Fetch posts from backend
   const fetchPosts = async () => {
     try {
-      const response = await fetch('http://localhost:5000/home', {
+      const response = await fetch(`${API_BASE_URL}/home`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -45,7 +45,7 @@ const Home = () => {
   // Fetch current user data
   const fetchCurrentUser = async () => {
     try {
-      const response = await fetch('http://localhost:5000/profile', {
+      const response = await fetch(`${API_BASE_URL}/profile`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -67,7 +67,7 @@ const Home = () => {
 
     try {
       setSearchLoading(true);
-      const response = await fetch(`http://localhost:5000/search/users?q=${encodeURIComponent(query)}`, {
+      const response = await fetch(`${API_BASE_URL}/search/users?q=${encodeURIComponent(query)}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -156,7 +156,7 @@ const Home = () => {
     try {
       // Make API call
       const endpoint = isLiked ? `unlike/${postId}` : `like/${postId}`;
-      const response = await fetch(`http://localhost:5000/${endpoint}`, {
+      const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

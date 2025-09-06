@@ -2,6 +2,7 @@ import axios from "axios";
 import { useState } from "react";
 import { Container, Form, Button, Card, Alert, Row, Col } from "react-bootstrap";
 import {  Link, useNavigate } from "react-router-dom";
+import API_BASE_URL from '../config/api';
 
 const SignUp = () => {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ const SignUp = () => {
     e.preventDefault();
     try {
       // Send the form data to the backend API
-      const response = await axios.post('http://localhost:5000/register',{"username":username,"password":password,"email":email});
+      const response = await axios.post(`${API_BASE_URL}/register`,{"username":username,"password":password,"email":email});
       
       // Store the JWT token, typically in localStorage or a cookie
       // console.log(response.data)

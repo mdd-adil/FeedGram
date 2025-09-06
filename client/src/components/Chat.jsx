@@ -3,6 +3,7 @@ import { Container, Row, Col, Card, Button, Form, ListGroup, Badge, Image } from
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
+import API_BASE_URL from '../config/api';
 
 const Chat = () => {
   const navigate = useNavigate();
@@ -48,7 +49,7 @@ const Chat = () => {
     setCurrentUser(userId);
 
     // Initialize socket connection
-    const newSocket = io('http://localhost:5000');
+    const newSocket = io(API_BASE_URL);
     setSocket(newSocket);
 
     // Authenticate with server
@@ -187,12 +188,12 @@ const Chat = () => {
       });
       setMessages(response.data.messages);
       
-      // Mark messages as read
+      // Mark messages ` read
       await axios.put(`http://localhost:5000/chat/read/${userId}`, {}, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      // Refresh user list to update unread count (without triggering URL parameter logic)
+      // Refresh user list to update unread count (without triggering URL par`eter logic)
       refreshUserList();
     } catch (error) {
       console.error('Error fetching chat history:', error);
