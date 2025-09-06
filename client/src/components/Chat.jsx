@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Container, Row, Col, Card, Button, Form, ListGroup, Badge, Image } from 'react-bootstrap';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
 
 const Chat = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { userId: paramUserId } = useParams();
   const [socket, setSocket] = useState(null);
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -16,6 +18,8 @@ const Chat = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [isSelectingUser, setIsSelectingUser] = useState(false);
+  const [showTemporaryUserNotice, setShowTemporaryUserNotice] = useState(false);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
@@ -90,7 +94,7 @@ const Chat = () => {
       // Refresh user list to update last message and unread count
       // Only refresh if the message is for/from current user
       if (message.sender._id === currentUser || message.receiver._id === currentUser) {
-        fetchUsers();
+        refreshUserList();
       }
     });
 
@@ -113,7 +117,54 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  const fetchUsers = async () => {
+  // Separate useEffect to handle direct messaging from URL parameters
+  useEffect(() => {
+    const handleDirectMessage = async () => {
+      if (!isSelectingUser) {
+        const urlParams = new URLSearchParams(location.search);
+        const queryUserId = urlParams.get('userId');
+        const directMessageUserId = paramUserId || queryUserId;
+        
+        if (directMessageUserId && !selectedUser) {
+          // First check if user is in the following/chat history list
+          let userToMessage = users.find(user => user._id === directMessageUserId);
+          
+          if (!userToMessage) {
+            // If not in list, fetch the specific user for temporary chat
+            // But DON'T add them to the persistent users list
+            try {
+              const token = localStorage.getItem('token');
+              const response = await axios.get(`http://localhost:5000/chat/user/${directMessageUserId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              userToMessage = response.data.user;
+              
+              // Mark this as a temporary user (not added to main list)
+              userToMessage.isTemporary = true;
+            } catch (error) {
+              console.error('Error fetching direct message user:', error);
+              return;
+            }
+          }
+          
+          if (userToMessage) {
+            setIsSelectingUser(true);
+            selectUser(userToMessage).finally(() => {
+              setIsSelectingUser(false);
+              // Clear URL parameters after selecting user to prevent repeated selections
+              if (queryUserId) {
+                navigate('/chat', { replace: true });
+              }
+            });
+          }
+        }
+      }
+    };
+
+    handleDirectMessage();
+  }, [users, location.search, paramUserId, selectedUser, isSelectingUser]);
+
+  const fetchUsers = useCallback(async () => {
     try {
       setIsLoadingUsers(true);
       const token = localStorage.getItem('token');
@@ -126,9 +177,9 @@ const Chat = () => {
     } finally {
       setIsLoadingUsers(false);
     }
-  };
+  }, []);
 
-  const fetchChatHistory = async (userId) => {
+  const fetchChatHistory = useCallback(async (userId) => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(`http://localhost:5000/chat/history/${userId}`, {
@@ -140,27 +191,56 @@ const Chat = () => {
       await axios.put(`http://localhost:5000/chat/read/${userId}`, {}, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+
+      // Refresh user list to update unread count (without triggering URL parameter logic)
+      refreshUserList();
     } catch (error) {
       console.error('Error fetching chat history:', error);
     }
-  };
+  }, []);
 
-  const selectUser = async (user) => {
+  const refreshUserList = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://localhost:5000/chat/users', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      // Only update the persistent users list
+      // Keep any temporary user if currently selected
+      const persistentUsers = response.data.users;
+      if (selectedUser && selectedUser.isTemporary) {
+        // If a temporary user is selected, don't replace the list completely
+        setUsers(persistentUsers);
+      } else {
+        setUsers(persistentUsers);
+      }
+    } catch (error) {
+      console.error('Error refreshing users:', error);
+    }
+  }, [selectedUser]);
+
+  const selectUser = useCallback(async (user) => {
     setSelectedUser(user);
     setMessages([]);
-    await fetchChatHistory(user._id);
     
-    // Refresh user list to update unread count after marking messages as read
-    fetchUsers();
+    // Show notice if this is a temporary user (not followed, no chat history)
+    if (user.isTemporary || (!user.isFollowing && !user.chatHistory)) {
+      setShowTemporaryUserNotice(true);
+    } else {
+      setShowTemporaryUserNotice(false);
+    }
+    
+    await fetchChatHistory(user._id);
     
     // Join chat room only if authenticated
     if (socket && isAuthenticated) {
       const chatId = [currentUser, user._id].sort().join('_');
       socket.emit('joinChat', chatId);
     }
-  };
+  }, [fetchChatHistory, socket, isAuthenticated, currentUser]);
 
-  const sendMessage = () => {
+  const sendMessage = useCallback(() => {
     if (newMessage.trim() && selectedUser && socket && isAuthenticated) {
       socket.emit('sendMessage', {
         receiverId: selectedUser._id,
@@ -176,9 +256,9 @@ const Chat = () => {
     } else if (!isAuthenticated) {
       alert('Please wait for authentication to complete');
     }
-  };
+  }, [newMessage, selectedUser, socket, isAuthenticated]);
 
-  const handleTyping = (e) => {
+  const handleTyping = useCallback((e) => {
     setNewMessage(e.target.value);
     
     if (selectedUser && socket && isAuthenticated) {
@@ -204,20 +284,13 @@ const Chat = () => {
         });
       }, 1000);
     }
-  };
+  }, [selectedUser, socket, isAuthenticated, isTyping]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const getAvatarSrc = (user) => {
-    if (user?.avatar) {
-      return user.avatar;
-    }
-    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user?.username || 'User')}`;
-  };
-
-    const formatTime = (timestamp) => {
+  const formatTime = useCallback((timestamp) => {
     const now = new Date();
     const messageTime = new Date(timestamp);
     const diffInMs = now - messageTime;
@@ -236,11 +309,59 @@ const Chat = () => {
       // Older - show date
       return messageTime.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
-  };
+  }, []);
 
-  const formatMessageTime = (timestamp) => {
+  const getAvatarSrc = useCallback((user) => {
+    if (user?.avatar) {
+      return user.avatar;
+    }
+    const username = user?.username || 'User';
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
+  }, []);
+
+  const formatMessageTime = useCallback((timestamp) => {
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  }, []);
+
+  // Memoized message list component for better performance
+  const MessageList = useMemo(() => {
+    return messages.map((message, index) => (
+      <div
+        key={index}
+        className={`d-flex mb-3 ${
+          message.sender._id === currentUser ? 'justify-content-end' : 'justify-content-start'
+        }`}
+      >
+        <div
+          className={`p-2 rounded-3 max-width-75 ${
+            message.sender._id === currentUser
+              ? 'bg-primary text-white'
+              : 'bg-light text-dark'
+          }`}
+          style={{ maxWidth: '75%' }}
+        >
+          <div>{message.message}</div>
+          <small 
+            className={`d-block mt-1 ${
+              message.sender._id === currentUser ? 'text-white-50' : 'text-muted'
+            }`}
+          >
+            {formatMessageTime(message.timestamp)}
+          </small>
+        </div>
+      </div>
+    ));
+  }, [messages, currentUser, formatMessageTime]);
+
+  // Memoize expensive computations
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      if (!a.lastMessage && !b.lastMessage) return 0;
+      if (!a.lastMessage) return 1;
+      if (!b.lastMessage) return -1;
+      return new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp);
+    });
+  }, [users]);
 
   return (
     <div style={{ 
@@ -258,11 +379,11 @@ const Chat = () => {
                 borderRadius: "15px 15px 0 0"
               }}>
                 <div className="d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0">Messages</h5>
+                  <h5 className="mb-0">Chats</h5>
                   <Button 
                     variant="outline-light" 
                     size="sm" 
-                    onClick={() => navigate('/home')}
+                    onClick={() => navigate(-1)}
                   >
                     Back
                   </Button>
@@ -278,11 +399,16 @@ const Chat = () => {
                   </div>
                 ) : users.length === 0 ? (
                   <div className="text-center p-4">
-                    <p className="text-muted">No users available to chat with</p>
+                    <p className="text-muted">No conversations yet</p>
+                    <small className="text-muted">
+                      Follow someone and send them a message to start chatting!
+                      <br />
+                      Or click the Message button on their profile.
+                    </small>
                   </div>
                 ) : (
                   <ListGroup variant="flush">
-                  {users.map(user => (
+                  {sortedUsers.map(user => (
                     <ListGroup.Item
                       key={user._id}
                       action
@@ -314,7 +440,18 @@ const Chat = () => {
                       </div>
                       <div className="flex-grow-1 ms-3 overflow-hidden">
                         <div className="d-flex justify-content-between align-items-start">
-                          <div className="fw-bold text-truncate">{user.username}</div>
+                          <div className="d-flex align-items-center">
+                            <div className="fw-bold text-truncate">{user.username}</div>
+                            {user.isFollowing && (
+                              <Badge 
+                                bg="success" 
+                                className="ms-2" 
+                                style={{ fontSize: "0.6rem" }}
+                              >
+                                Following
+                              </Badge>
+                            )}
+                          </div>
                           {user.lastMessage && (
                             <small className="text-muted flex-shrink-0 ms-2">
                               {formatTime(user.lastMessage.timestamp)}
@@ -378,32 +515,15 @@ const Chat = () => {
                       padding: '20px'
                     }}
                   >
-                    {messages.map((message, index) => (
-                      <div
-                        key={index}
-                        className={`d-flex mb-3 ${
-                          message.sender._id === currentUser ? 'justify-content-end' : 'justify-content-start'
-                        }`}
-                      >
-                        <div
-                          className={`p-2 rounded-3 max-width-75 ${
-                            message.sender._id === currentUser
-                              ? 'bg-primary text-white'
-                              : 'bg-light text-dark'
-                          }`}
-                          style={{ maxWidth: '75%' }}
-                        >
-                          <div>{message.message}</div>
-                          <small 
-                            className={`d-block mt-1 ${
-                              message.sender._id === currentUser ? 'text-white-50' : 'text-muted'
-                            }`}
-                          >
-                            {formatMessageTime(message.timestamp)}
-                          </small>
-                        </div>
+                    {/* Temporary user notice */}
+                    {showTemporaryUserNotice && (
+                      <div className="alert alert-info mb-3" style={{ fontSize: '0.9rem' }}>
+                        <i className="bi bi-info-circle me-2"></i>
+                        You're chatting with someone you don't follow. This conversation won't appear in your main chat list unless you follow them or they send you a message.
                       </div>
-                    ))}
+                    )}
+                    
+                    {MessageList}
                     <div ref={messagesEndRef} />
                   </Card.Body>
 

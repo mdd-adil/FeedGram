@@ -49,6 +49,16 @@ const UserProfile = () => {
     }
   }, [userId, currentUserId, navigate]);
 
+  // Fetch data when active tab changes
+  useEffect(() => {
+    if (user._id && (activeTab === "followers" || activeTab === "following")) {
+      // Only fetch if we can view the profile (not private, or private but we're following)
+      if (!user.isPrivate || isFollowing) {
+        fetchFollowersAndFollowing();
+      }
+    }
+  }, [activeTab, user._id, user.isPrivate, isFollowing]);
+
   const fetchUserProfile = async () => {
     try {
       setLoading(true);
@@ -75,8 +85,9 @@ const UserProfile = () => {
       setIsFollowing(profileResponse.data.isFollowing || false);
       setFollowRequestSent(profileResponse.data.followRequestSent || false);
       
-      // Fetch followers and following if allowed
-      if (!profileResponse.data.user.isPrivate || profileResponse.data.canViewPosts) {
+      // Fetch followers and following if we can view the profile
+      // This includes: own profile, public profiles, or private profiles we're following
+      if (!profileResponse.data.user.isPrivate || profileResponse.data.canViewPosts || profileResponse.data.isFollowing) {
         await fetchFollowersAndFollowing();
       }
       
@@ -106,6 +117,11 @@ const UserProfile = () => {
       setFollowing(followingRes.data.following || []);
     } catch (error) {
       console.error('Error fetching followers/following:', error);
+      if (error.response?.status === 403) {
+        console.log('Private account - cannot view followers/following');
+        setFollowers([]);
+        setFollowing([]);
+      }
     }
   };
 
@@ -206,6 +222,26 @@ const UserProfile = () => {
     }
   };
 
+  const handleMessage = () => {
+    navigate(`/chat?userId=${userId}`);
+  };
+
+  const renderActionButtons = () => {
+    return (
+      <div className="d-flex gap-2">
+        {renderFollowButton()}
+        <Button
+          variant="outline-primary"
+          size="sm"
+          onClick={handleMessage}
+          style={{ borderRadius: "20px", padding: "8px 20px" }}
+        >
+          Message
+        </Button>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <Container className="py-5">
@@ -298,7 +334,7 @@ const UserProfile = () => {
                         </Badge>
                       )}
                     </div>
-                    {renderFollowButton()}
+                    {renderActionButtons()}
                   </div>
                   
                   {user.bio && (
@@ -406,7 +442,11 @@ const UserProfile = () => {
 
               {activeTab === "followers" && (
                 <Row className="g-3 mb-5">
-                  {followers.length > 0 ? (
+                  {user.isPrivate && !isFollowing ? (
+                    <div className="text-center my-5">
+                      <p className="text-muted">This account is private. Follow to see their followers.</p>
+                    </div>
+                  ) : followers.length > 0 ? (
                     followers.map((follower) => (
                       <Col key={follower._id} md={6} lg={4}>
                         <Card className="h-100 shadow-sm border-0" style={{ borderRadius: "15px" }}>
@@ -449,7 +489,11 @@ const UserProfile = () => {
 
               {activeTab === "following" && (
                 <Row className="g-3 mb-5">
-                  {following.length > 0 ? (
+                  {user.isPrivate && !isFollowing ? (
+                    <div className="text-center my-5">
+                      <p className="text-muted">This account is private. Follow to see who they're following.</p>
+                    </div>
+                  ) : following.length > 0 ? (
                     following.map((followingUser) => (
                       <Col key={followingUser._id} md={6} lg={4}>
                         <Card className="h-100 shadow-sm border-0" style={{ borderRadius: "15px" }}>

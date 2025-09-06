@@ -49,6 +49,10 @@ export default function FeedPost(props) {
     return null;
   };
 
+  const handleMessage = (userId) => {
+    navigate(`/chat?userId=${userId}`);
+  };
+
   const currentUserId = getCurrentUserId();
   const isLiked = props.post.likes && props.post.likes.includes(currentUserId);
 
@@ -296,7 +300,7 @@ export default function FeedPost(props) {
                 </h6>
                 {/* Follow button for other users */}
                 {(props.post.user?._id !== currentUserId && props.post.user !== currentUserId) && (
-                  <div className="ms-2">
+                  <div className="ms-2 d-flex gap-2">
                     {isFollowing ? (
                       <Button
                         variant="outline-danger"
@@ -332,6 +336,14 @@ export default function FeedPost(props) {
                         {followLoading ? 'Loading...' : 'Follow'}
                       </Button>
                     )}
+                    <Button
+                      variant="outline-primary"
+                      size="sm"
+                      onClick={() => handleMessage(props.post.user?._id || props.post.user)}
+                      style={{ borderRadius: "15px", fontSize: "17px", padding: "2px 8px" }}
+                    >
+                      Message
+                    </Button>
                   </div>
                 )}
               </div>

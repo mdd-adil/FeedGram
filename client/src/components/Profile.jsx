@@ -629,13 +629,22 @@ const Profile = () => {
                         </h6>
                         <small className="text-muted">Follower</small>
                       </div>
-                      <Button
-                        variant="outline-primary"
-                        size="sm"
-                        onClick={() => navigate(`/user/${follower._id}`)}
-                      >
-                        View
-                      </Button>
+                      <div className="d-flex gap-2">
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          onClick={() => navigate(`/user/${follower._id}`)}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          variant="outline-success"
+                          size="sm"
+                          onClick={() => navigate(`/chat?userId=${follower._id}`)}
+                        >
+                          Message
+                        </Button>
+                      </div>
                     </Card.Body>
                   </Card>
                 </Col>
@@ -672,14 +681,23 @@ const Profile = () => {
                         </h6>
                         <small className="text-muted">Following</small>
                       </div>
-                      <Button
-                        variant="outline-danger"
-                        size="sm"
-                        onClick={() => unfollowUser(followingUser._id)}
-                        disabled={isUnfollowing === followingUser._id}
-                      >
-                        {isUnfollowing === followingUser._id ? 'Unfollowing...' : 'Unfollow'}
-                      </Button>
+                      <div className="d-flex gap-2">
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          onClick={() => unfollowUser(followingUser._id)}
+                          disabled={isUnfollowing === followingUser._id}
+                        >
+                          {isUnfollowing === followingUser._id ? 'Unfollowing...' : 'Unfollow'}
+                        </Button>
+                        <Button
+                          variant="outline-success"
+                          size="sm"
+                          onClick={() => navigate(`/chat?userId=${followingUser._id}`)}
+                        >
+                          Message
+                        </Button>
+                      </div>
                     </Card.Body>
                   </Card>
                 </Col>

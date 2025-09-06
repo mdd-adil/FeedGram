@@ -50,5 +50,11 @@ const userSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }]
-})
-    module.exports = mongoose.model('User', userSchema);
+});
+
+// Indexes for better query performance
+
+userSchema.index({ followers: 1 });
+userSchema.index({ following: 1 });
+
+module.exports = mongoose.model('User', userSchema);

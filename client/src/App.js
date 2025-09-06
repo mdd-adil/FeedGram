@@ -27,6 +27,7 @@ function App() {
           <Route path='/createPost' element={<CreatePost />} />
           <Route path='/editPost/:postId' element={<EditPost />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/chat/:userId" element={<Chat />} />
           <Route path="*" element={<Navigate to="/home" />} />
           </Route>
           <Route path='/login' element={<Login />} />

@@ -31,9 +31,13 @@ trim:true
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         default:[]
-       
-       
     }],
     timestamp: { type: Date, default: Date.now }
-    })
-    module.exports = mongoose.model('Post', postSchema);
+});
+
+// Indexes for better query performance
+postSchema.index({ user: 1, timestamp: -1 });
+postSchema.index({ timestamp: -1 });
+postSchema.index({ likes: 1 });
+
+module.exports = mongoose.model('Post', postSchema);

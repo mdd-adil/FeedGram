@@ -245,8 +245,16 @@ const getFollowers = async (req, res) => {
         }
 
         // Check if current user can view followers
-        if (user.isPrivate && userId !== currentUserId && !user.followers.includes(currentUserId)) {
-            return res.status(403).json({ message: "This account is private" });
+        // Own profile: always allowed
+        // Public profile: always allowed
+        // Private profile: only if current user is following them (is in their followers list)
+        if (user.isPrivate && userId !== currentUserId) {
+            const currentUserAsObjectId = currentUserId.toString();
+            const isFollowing = user.followers.some(follower => follower._id.toString() === currentUserAsObjectId);
+            
+            if (!isFollowing) {
+                return res.status(403).json({ message: "This account is private" });
+            }
         }
 
         res.status(200).json({ followers: user.followers });
@@ -270,8 +278,16 @@ const getFollowing = async (req, res) => {
         }
 
         // Check if current user can view following
-        if (user.isPrivate && userId !== currentUserId && !user.followers.includes(currentUserId)) {
-            return res.status(403).json({ message: "This account is private" });
+        // Own profile: always allowed
+        // Public profile: always allowed  
+        // Private profile: only if current user is following them (is in their followers list)
+        if (user.isPrivate && userId !== currentUserId) {
+            const currentUserAsObjectId = currentUserId.toString();
+            const isFollowing = user.followers.some(follower => follower._id.toString() === currentUserAsObjectId);
+            
+            if (!isFollowing) {
+                return res.status(403).json({ message: "This account is private" });
+            }
         }
 
         res.status(200).json({ following: user.following });
