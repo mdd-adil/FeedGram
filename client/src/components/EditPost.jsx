@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Button, Card, Form, Alert } from 'react-bootstrap';
 import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
 
 const EditPost = () => {
   const navigate = useNavigate();
@@ -25,7 +26,7 @@ const EditPost = () => {
           return;
         }
 
-        const response = await axios.get(`http://localhost:5000/updatePost/${postId}`, {
+        const response = await axios.get(`${API_BASE_URL}/updatePost/${postId}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -91,7 +92,7 @@ const EditPost = () => {
         formData.append('image', selectedFile);
       }
 
-      await axios.put(`http://localhost:5000/updatePost/${postId}`, formData, {
+      await axios.put(`${API_BASE_URL}/updatePost/${postId}`, formData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -124,7 +125,7 @@ const EditPost = () => {
     if (window.confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://localhost:5000/deletePost/${postId}`, {
+        await axios.delete(`${API_BASE_URL}/deletePost/${postId}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

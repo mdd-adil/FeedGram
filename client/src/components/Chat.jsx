@@ -135,7 +135,7 @@ const Chat = () => {
             // But DON'T add them to the persistent users list
             try {
               const token = localStorage.getItem('token');
-              const response = await axios.get(`http://localhost:5000/chat/user/${directMessageUserId}`, {
+              const response = await axios.get(`${API_BASE_URL}/chat/user/${directMessageUserId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
               userToMessage = response.data.user;
@@ -169,7 +169,7 @@ const Chat = () => {
     try {
       setIsLoadingUsers(true);
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/chat/users', {
+      const response = await axios.get(`${API_BASE_URL}/chat/users`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setUsers(response.data.users);
@@ -183,13 +183,13 @@ const Chat = () => {
   const fetchChatHistory = useCallback(async (userId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`http://localhost:5000/chat/history/${userId}`, {
+      const response = await axios.get(`${API_BASE_URL}/chat/history/${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setMessages(response.data.messages);
       
-      // Mark messages ` read
-      await axios.put(`http://localhost:5000/chat/read/${userId}`, {}, {
+      // Mark messages as read
+      await axios.put(`${API_BASE_URL}/chat/read/${userId}`, {}, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -203,7 +203,7 @@ const Chat = () => {
   const refreshUserList = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/chat/users', {
+      const response = await axios.get(`${API_BASE_URL}/chat/users`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       

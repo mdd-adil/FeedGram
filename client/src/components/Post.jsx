@@ -2,6 +2,7 @@ import React, {  useState } from 'react'
 import {  Col, Card, Button, Modal, Alert } from "react-bootstrap";
 import { timeAgo } from './FeedPost';
 import { useNavigate } from 'react-router-dom';
+import API_BASE_URL from '../config/api';
 
 export default function Post({post, onLike, onDelete}) {
     const navigate = useNavigate(); 
@@ -34,7 +35,7 @@ export default function Post({post, onLike, onDelete}) {
     const handleDelete = async (postId) => {
         setShowDeleteModal(false);
         try {
-            const response = await fetch(`http://localhost:5000/deletePost/${postId}`, {
+            const response = await fetch(`${API_BASE_URL}/deletePost/${postId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`,

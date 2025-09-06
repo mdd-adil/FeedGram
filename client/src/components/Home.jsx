@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Container, Card, Button, Row, Col, Image, Form } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import FeedPost from "./FeedPost";
+import { API_BASE_URL } from "../config/api";
 
 const Home = () => {
   const navigate = useNavigate();

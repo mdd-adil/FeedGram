@@ -3,6 +3,7 @@ import { Container, Row, Col, Card, Image, Button, Nav, Badge, Alert } from 'rea
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Post from './Post';
+import { API_BASE_URL } from '../config/api';
 
 const UserProfile = () => {
   const { userId } = useParams();
@@ -68,7 +69,7 @@ const UserProfile = () => {
       console.log('Token available:', !!token);
       
       // Fetch user profile
-      const profileResponse = await axios.get(`http://localhost:5000/user-profile/${userId}`, {
+      const profileResponse = await axios.get(`${API_BASE_URL}/user-profile/${userId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -105,10 +106,10 @@ const UserProfile = () => {
       const token = localStorage.getItem('token');
       
       const [followersRes, followingRes] = await Promise.all([
-        axios.get(`http://localhost:5000/follow/followers/${userId}`, {
+        axios.get(`${API_BASE_URL}/follow/followers/${userId}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
-        axios.get(`http://localhost:5000/follow/following/${userId}`, {
+        axios.get(`${API_BASE_URL}/follow/following/${userId}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
       ]);
@@ -131,7 +132,7 @@ const UserProfile = () => {
       
       if (isFollowing) {
         // Unfollow
-        await axios.delete(`http://localhost:5000/follow/unfollow/${userId}`, {
+        await axios.delete(`${API_BASE_URL}/follow/unfollow/${userId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setIsFollowing(false);
@@ -147,7 +148,7 @@ const UserProfile = () => {
         await fetchFollowersAndFollowing();
       } else {
         // Follow
-        const response = await axios.post(`http://localhost:5000/follow/follow/${userId}`, {}, {
+        const response = await axios.post(`${API_BASE_URL}/follow/follow/${userId}`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
         

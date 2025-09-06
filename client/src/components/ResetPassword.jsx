@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Container, Form, Button, Card, Alert } from "react-bootstrap";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from 'axios';
+import { API_BASE_URL } from "../config/api";
 
 const ResetPassword = () => {
   const { token } = useParams();
@@ -38,7 +39,7 @@ const ResetPassword = () => {
     }
     
     try {
-      const response = await axios.post('http://localhost:5000/reset-password', {
+      const response = await axios.post(`${API_BASE_URL}/reset-password`, {
         token: token,
         password: password,
         confirmPassword: confirmPassword

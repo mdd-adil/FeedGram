@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {  Card, Button, Image, Alert, Modal } from "react-bootstrap";
 import { useNavigate } from 'react-router-dom';
+import API_BASE_URL from '../config/api';
 
 // Function to format timestamp to "time ago"
 export const timeAgo = (timestamp) => {
@@ -63,7 +64,7 @@ export default function FeedPost(props) {
       if (postUserId && postUserId !== currentUserId) {
         try {
           const token = localStorage.getItem('token');
-          const response = await fetch(`http://localhost:5000/user-profile/${postUserId}`, {
+          const response = await fetch(`${API_BASE_URL}/user-profile/${postUserId}`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
@@ -95,7 +96,7 @@ export default function FeedPost(props) {
     try {
       setFollowLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/follow/follow/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/follow/follow/${userId}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -134,7 +135,7 @@ export default function FeedPost(props) {
     try {
       setFollowLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/follow/unfollow/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/follow/unfollow/${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -171,7 +172,7 @@ export default function FeedPost(props) {
   const handleDelete = async (postId) => {
     setShowDeleteModal(false);
     try {
-        const response = await fetch(`http://localhost:5000/deletePost/${postId}`, {
+        const response = await fetch(`${API_BASE_URL}/deletePost/${postId}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`,

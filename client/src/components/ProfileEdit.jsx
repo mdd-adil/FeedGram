@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Container, Row, Col, Card, Button, Form, Image, Alert, Spinner } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import API_BASE_URL from '../config/api';
 
 const ProfileEdit = () => {
   const navigate = useNavigate();
@@ -29,7 +30,7 @@ const ProfileEdit = () => {
       }
 
       try {
-        const response = await axios.get("http://localhost:5000/profile", {
+            const response = await axios.get(`${API_BASE_URL}/profile`, {
           headers: {
             Authorization: "Bearer " + token,
           },
@@ -108,7 +109,7 @@ const ProfileEdit = () => {
         formDataToSend.append("avatar", selectedFile);
       }
 
-      const response = await axios.put("http://localhost:5000/updateProfile", formDataToSend, {
+      const response = await axios.put(`${API_BASE_URL}/updateProfile`, formDataToSend, {
         headers: {
           Authorization: "Bearer " + token,
           "Content-Type": "multipart/form-data",

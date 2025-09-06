@@ -3,6 +3,7 @@ import { Container, Row, Col, Card, Button, Nav, Image, Alert } from "react-boot
 import { useNavigate,Navigate } from "react-router-dom";
 import axios from "axios";
 import Post from "./Post";
+import { API_BASE_URL } from "../config/api";
 
 
 const Profile = () => {
@@ -72,7 +73,7 @@ const Profile = () => {
     try {
       // Make API call
       const endpoint = isLiked ? `unlike/${postId}` : `like/${postId}`;
-      const response = await fetch(`http://localhost:5000/${endpoint}`, {
+      const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -125,7 +126,7 @@ const Profile = () => {
   const togglePrivacy = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.patch('http://localhost:5000/follow/privacy/toggle', {}, {
+      const response = await axios.patch(`${API_BASE_URL}/follow/privacy/toggle`, {}, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -155,7 +156,7 @@ const Profile = () => {
     try {
       const token = localStorage.getItem('token');
       const userId = getCurrentUserId();
-      const response = await axios.get(`http://localhost:5000/follow/followers/${userId}`, {
+      const response = await axios.get(`${API_BASE_URL}/follow/followers/${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setFollowers(response.data.followers);
@@ -169,7 +170,7 @@ const Profile = () => {
     try {
       const token = localStorage.getItem('token');
       const userId = getCurrentUserId();
-      const response = await axios.get(`http://localhost:5000/follow/following/${userId}`, {
+      const response = await axios.get(`${API_BASE_URL}/follow/following/${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setFollowing(response.data.following);
@@ -182,7 +183,7 @@ const Profile = () => {
   const fetchFollowRequests = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/follow/requests', {
+      const response = await axios.get(`${API_BASE_URL}/follow/requests`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       setFollowRequests(response.data.requests);
@@ -195,7 +196,7 @@ const Profile = () => {
   const acceptFollowRequest = async (requesterId) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`http://localhost:5000/follow/accept/${requesterId}`, {}, {
+      await axios.post(`${API_BASE_URL}/follow/accept/${requesterId}`, {}, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -229,7 +230,7 @@ const Profile = () => {
   const rejectFollowRequest = async (requesterId) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:5000/follow/reject/${requesterId}`, {
+      await axios.delete(`${API_BASE_URL}/follow/reject/${requesterId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -264,7 +265,7 @@ const Profile = () => {
     try {
       setIsUnfollowing(userId); // Set loading state for this specific user
       const token = localStorage.getItem('token');
-      const response = await axios.delete(`http://localhost:5000/follow/unfollow/${userId}`, {
+      const response = await axios.delete(`${API_BASE_URL}/follow/unfollow/${userId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -303,7 +304,7 @@ const Profile = () => {
         return;
       }
       try {
-        const response = await axios.get("http://localhost:5000/profile", {
+        const response = await axios.get(`${API_BASE_URL}/profile`, {
           headers: {
             Authorization: "Bearer " + token,
           },
@@ -335,7 +336,7 @@ const Profile = () => {
 
  const handleLogout = async () => {
    try {
-     await axios.post("http://localhost:5000/logout", {}, {
+     await axios.post(`${API_BASE_URL}/logout`, {}, {
        headers: {
          Authorization: "Bearer " + localStorage.getItem('token'),
        },

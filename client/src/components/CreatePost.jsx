@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Form, Alert } from 'react-bootstrap';
+import API_BASE_URL from '../config/api';
 
 const CreatePost = () => {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ const CreatePost = () => {
         formData.append('image', selectedImage);
       }
 
-      const response = await fetch('http://localhost:5000/createPost', {
+      const response = await fetch(`${API_BASE_URL}/createPost`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
