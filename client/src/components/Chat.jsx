@@ -48,16 +48,24 @@ const Chat = () => {
     const userId = getCurrentUser();
     setCurrentUser(userId);
 
-    // Initialize socket connection
-    const newSocket = io(API_BASE_URL);
+    // Initialize socket connection with optimized settings
+    const newSocket = io(API_BASE_URL, {
+      transports: ['websocket', 'polling'],
+      timeout: 5000,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      autoConnect: true,
+      forceNew: false
+    });
     setSocket(newSocket);
 
     // Authenticate with server
     newSocket.emit('authenticate', token);
 
-    // Handle authentication success
+    // Handle authentication success with timeout
     newSocket.on('authSuccess', (data) => {
-    //   console.log('Authentication successful:', data);
+      console.log('Authentication successful');
       setIsAuthenticated(true);
     });
 
@@ -65,7 +73,22 @@ const Chat = () => {
     newSocket.on('authError', (error) => {
       console.error('Authentication error:', error);
       setIsAuthenticated(false);
+      localStorage.removeItem('token');
       navigate('/login');
+    });
+
+    // Add connection status listeners
+    newSocket.on('connect', () => {
+      console.log('Socket connected');
+    });
+
+    newSocket.on('disconnect', () => {
+      console.log('Socket disconnected');
+      setIsAuthenticated(false);
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('Connection error:', error);
     });
 
     // Handle message errors
@@ -74,28 +97,29 @@ const Chat = () => {
       alert('Failed to send message: ' + error);
     });
 
-    // Listen for new messages
+    // Listen for new messages with optimized handling
     newSocket.on('newMessage', (message) => {
       setMessages(prev => {
-        // Check if message already exists to prevent duplicates
-        const messageExists = prev.some(msg => 
-          msg._id === message._id || 
-          (msg.message === message.message && 
-           msg.sender._id === message.sender._id && 
-           Math.abs(new Date(msg.timestamp) - new Date(message.timestamp)) < 1000)
-        );
+        // Remove any optimistic message with similar content
+        const filteredMessages = prev.filter(msg => {
+          if (msg.isOptimistic && 
+              msg.message === message.message && 
+              msg.sender._id === message.sender._id) {
+            return false; // Remove optimistic message
+          }
+          return true;
+        });
         
-        if (messageExists) {
-          return prev;
-        }
+        // Check if real message already exists
+        const messageExists = filteredMessages.some(msg => msg._id === message._id);
+        if (messageExists) return prev;
         
-        return [...prev, message];
+        return [...filteredMessages, message];
       });
       
-      // Refresh user list to update last message and unread count
-      // Only refresh if the message is for/from current user
+      // Refresh user list only if message involves current user
       if (message.sender._id === currentUser || message.receiver._id === currentUser) {
-        refreshUserList();
+        setTimeout(() => refreshUserList(), 100); // Debounce refresh
       }
     });
 
@@ -243,11 +267,27 @@ const Chat = () => {
 
   const sendMessage = useCallback(() => {
     if (newMessage.trim() && selectedUser && socket && isAuthenticated) {
+      const messageText = newMessage.trim();
+      const tempId = Date.now().toString(); // Temporary ID for optimistic update
+      
+      // Optimistic UI update - add message immediately
+      const optimisticMessage = {
+        _id: tempId,
+        message: messageText,
+        sender: { _id: currentUser },
+        receiver: { _id: selectedUser._id },
+        timestamp: new Date().toISOString(),
+        isOptimistic: true // Flag to identify temporary message
+      };
+      
+      setMessages(prev => [...prev, optimisticMessage]);
+      setNewMessage('');
+      
+      // Send message to server
       socket.emit('sendMessage', {
         receiverId: selectedUser._id,
-        message: newMessage.trim()
+        message: messageText
       });
-      setNewMessage('');
       
       // Stop typing indicator
       socket.emit('typing', {
@@ -257,7 +297,7 @@ const Chat = () => {
     } else if (!isAuthenticated) {
       alert('Please wait for authentication to complete');
     }
-  }, [newMessage, selectedUser, socket, isAuthenticated]);
+  }, [newMessage, selectedUser, socket, isAuthenticated, currentUser]);
 
   const handleTyping = useCallback((e) => {
     setNewMessage(e.target.value);

@@ -19,7 +19,11 @@ const io = socketIo(server, {
     ],
     methods: ["GET", "POST"],
     credentials: true
-  }
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ['websocket', 'polling'],
+  allowEIO3: true
 });
 const mongoDb=require('./config/mongoConnect');
 const loginRoute=require('./routes/loginRoute');
@@ -123,7 +127,7 @@ io.on('connection', (socket) => {
     // console.log(`User ${socket.userId} joined chat ${chatId}`);
   });
 
-  // Handle sending messages
+  // Handle sending messages with optimized delivery
   socket.on('sendMessage', async (data) => {
     try {
       const { receiverId, message } = data;
@@ -133,6 +137,12 @@ io.on('connection', (socket) => {
         socket.emit('messageError', 'User not authenticated');
         return;
       }
+
+      // Validate message
+      if (!message || !message.trim()) {
+        socket.emit('messageError', 'Message cannot be empty');
+        return;
+      }
       
       // Save message to database
       const savedMessage = await sendMessage(socket.userId, receiverId, message);
@@ -140,8 +150,14 @@ io.on('connection', (socket) => {
       // Create chat room ID (consistent between users)
       const chatId = [socket.userId, receiverId].sort().join('_');
       
-      // Emit message to both users in the chat room
+      // Emit message to chat room immediately
       io.to(chatId).emit('newMessage', savedMessage);
+      
+      // Also emit directly to receiver if they're connected (for instant delivery)
+      const receiverSocketId = connectedUsers.get(receiverId);
+      if (receiverSocketId && receiverSocketId !== socket.id) {
+        io.to(receiverSocketId).emit('newMessage', savedMessage);
+      }
       
     } catch (error) {
       console.error('Error sending message:', error);
