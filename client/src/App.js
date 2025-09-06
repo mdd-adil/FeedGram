@@ -11,6 +11,9 @@ import CreatePost from "./components/CreatePost";
 import EditPost from "./components/EditPost";
 import ForgotPassword from "./components/ForgotPassword";
 import ResetPassword from "./components/ResetPassword";
+import Chat from "./components/Chat";
+
+
 function App() {
   return (
    <BrowserRouter>
@@ -21,8 +24,9 @@ function App() {
           <Route path='/profile/edit' element={<ProfileEdit />} />
           <Route path='/createPost' element={<CreatePost />} />
           <Route path='/editPost/:postId' element={<EditPost />} />
+          <Route path="*" element={<Navigate to="/home" />} />
+          <Route path="/chat" element={<Chat />} />
           </Route>
-          <Route path="*" element={<Navigate to="/login" />} />
           <Route path='/login' element={<Login />} />
           <Route path='/signup' element={<Register />} />
           <Route path='/forgot-password' element={<ForgotPassword />} />

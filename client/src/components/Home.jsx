@@ -200,6 +200,17 @@ const Home = () => {
               />
               <Button 
                 variant="outline-light"
+                onClick={() => navigate('/chat')}
+                style={{ borderRadius: "20px",
+                  background:"linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                  marginRight: "15px"
+                }}
+              >
+                Chat �
+              </Button>
+
+              <Button 
+                variant="outline-light"
                 onClick={handleLogout}
                 style={{ borderRadius: "20px",
                   background:"linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Container, Row, Col, Card, Button, Nav, Badge, Image } from "react-bootstrap";
+import { Container, Row, Col, Card, Button, Nav, Image } from "react-bootstrap";
 import { useNavigate,Navigate } from "react-router-dom";
 import axios from "axios";
 import Post from "./Post";
@@ -252,10 +252,10 @@ const Profile = () => {
                         }}
                         className="me-2"
                         onClick={() => {
-                      if(window.confirm('Are you sure you want to edit your profile?')) {
+                      
                        navigate('/profile/edit')
                       }
-                    }}
+                    }
                       >
                         Edit Profile
                       </Button>

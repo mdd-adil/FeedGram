@@ -91,7 +91,7 @@ const EditPost = () => {
         formData.append('image', selectedFile);
       }
 
-      const response = await axios.put(`http://localhost:5000/updatePost/${postId}`, formData, {
+      await axios.put(`http://localhost:5000/updatePost/${postId}`, formData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -117,7 +117,7 @@ const EditPost = () => {
   };
 
   const handleCancel = () => {
-    navigate('/home');
+    navigate('/profile');
   };
 
   const handleDelete = async () => {
@@ -159,10 +159,11 @@ const EditPost = () => {
         <div className="row justify-content-center">
           <div className="col-md-8">
             <Card className="shadow-lg">
-              <Card.Header className="text-white text-center py-4" style={{
+              <Card.Header className="text-white text-center py-4 d-flex justify-content-between align-items-center" style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
               }}>
                 <h2 className="mb-0">Edit Post</h2>
+                <Button variant="light" onClick={handleCancel}>❌</Button>
               </Card.Header>
               <Card.Body className="p-4">
                 {error && <Alert variant="danger">{error}</Alert>}
