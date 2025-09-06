@@ -3,7 +3,7 @@ import { Container, Row, Col, Card, Button, Form, ListGroup, Badge, Image } from
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
-import API_BASE_URL from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 const Chat = () => {
   const navigate = useNavigate();

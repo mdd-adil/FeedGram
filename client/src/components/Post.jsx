@@ -2,7 +2,7 @@ import React, {  useState } from 'react'
 import {  Col, Card, Button, Modal, Alert } from "react-bootstrap";
 import { timeAgo } from './FeedPost';
 import { useNavigate } from 'react-router-dom';
-import API_BASE_URL from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 export default function Post({post, onLike, onDelete}) {
     const navigate = useNavigate(); 

@@ -7,8 +7,18 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
-    methods: ["GET", "POST"]
+    origin: [
+      'http://localhost:3000', 
+      'http://localhost:3001',
+      'https://feedgram-frontend.vercel.app',
+      'https://feedgram-frontend.onrender.com',
+      'https://feedgram.vercel.app',
+      'https://feed-gram.vercel.app',
+      /^https:\/\/.*\.vercel\.app$/,
+      /^https:\/\/.*\.onrender\.com$/
+    ],
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 const mongoDb=require('./config/mongoConnect');
@@ -43,7 +53,16 @@ app.use(express.json());
 app.use(cookieParser())
 app.use(bodyParser.json())
 const corsOptions = {
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  origin: [
+    'http://localhost:3000', 
+    'http://localhost:3001',
+    'https://feedgram-frontend.vercel.app',
+    'https://feedgram-frontend.onrender.com',
+    'https://feedgram.vercel.app',
+    'https://feed-gram.vercel.app',
+    /^https:\/\/.*\.vercel\.app$/,
+    /^https:\/\/.*\.onrender\.com$/
+  ],
   credentials: true,
 };
 app.use(cors(corsOptions));

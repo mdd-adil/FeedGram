@@ -2,7 +2,7 @@ import axios from "axios";
 import { useState } from "react";
 import { Container, Form, Button, Card, Alert, Row, Col } from "react-bootstrap";
 import {  Link, useNavigate } from "react-router-dom";
-import API_BASE_URL from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 const SignUp = () => {
   const navigate = useNavigate();

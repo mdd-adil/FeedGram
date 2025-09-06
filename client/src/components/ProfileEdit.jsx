@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Container, Row, Col, Card, Button, Form, Image, Alert, Spinner } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import API_BASE_URL from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 const ProfileEdit = () => {
   const navigate = useNavigate();

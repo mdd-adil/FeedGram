@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {  Card, Button, Image, Alert, Modal } from "react-bootstrap";
 import { useNavigate } from 'react-router-dom';
-import API_BASE_URL from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 // Function to format timestamp to "time ago"
 export const timeAgo = (timestamp) => {
