@@ -47,6 +47,7 @@ const jwt = require('jsonwebtoken');
 const UserProfile = require('./routes/userProfileRoute');
 const followRoute = require('./routes/followRoute');
 const searchRoute = require('./routes/searchRoute');
+const deleteAccountRoute = require('./routes/deleteAccountRoute');
 const PORT = process.env.PORT || 5000;
 
 
@@ -94,6 +95,7 @@ app.use('/reset-password', resetPasswordRoute);
 app.use('/user-profile', UserProfile);
 app.use('/follow', followRoute);
 app.use('/search', searchRoute);
+app.use('/delete-account', deleteAccountRoute);
 
 // Socket.io connection handling
 const connectedUsers = new Map();

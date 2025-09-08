@@ -134,6 +134,22 @@ const ProfileEdit = () => {
     navigate(-1);
   };
 
+  const handleDeleteAccount = async () => {
+    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.delete(`${API_BASE_URL}/delete-account`, {
+          headers: { Authorization: 'Bearer ' + token },
+          withCredentials: true
+        });
+        localStorage.removeItem('token');
+        navigate('/register');
+      } catch (err) {
+        setError('Failed to delete account. Please try again.');
+      }
+    }
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "#f8f9fa" }}>
       {/* Header */}
@@ -316,6 +332,17 @@ const ProfileEdit = () => {
                       </Button>
                     </div>
                   </Form>
+
+                  {/* Delete Account Button */}
+                  <div className="text-center mt-4">
+                    <Button
+                      variant="danger"
+                      className="mt-3"
+                      onClick={handleDeleteAccount}
+                    >
+                      Delete Account
+                    </Button>
+                  </div>
                 </Card.Body>
               </Card>
             )}
