@@ -135,18 +135,16 @@ const ProfileEdit = () => {
   };
 
   const handleDeleteAccount = async () => {
-    if (window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      try {
-        const token = localStorage.getItem('token');
-        await axios.delete(`${API_BASE_URL}/delete-account`, {
-          headers: { Authorization: 'Bearer ' + token },
-          withCredentials: true
-        });
-        localStorage.removeItem('token');
-        navigate('/register');
-      } catch (err) {
-        setError('Failed to delete account. Please try again.');
-      }
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_BASE_URL}/delete-account`, {
+        headers: { Authorization: 'Bearer ' + token },
+        withCredentials: true
+      });
+      localStorage.removeItem('token');
+      navigate('/register');
+    } catch (err) {
+      setError('Failed to delete account. Please try again.');
     }
   };
 
