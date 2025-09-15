@@ -106,6 +106,7 @@ const getChatUsers = async (req, res) => {
                     _id: { $ne: currentUserId },
                     $or: [
                         { followers: currentUserId }, // Users following current user
+                        { following: currentUserId }, // Users you are following
                         { _id: { $in: chatUserIdsList } } // Users with chat history
                     ]
                 }
