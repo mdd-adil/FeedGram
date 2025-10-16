@@ -67,6 +67,7 @@ const getChatHistory = async (req, res) => {
 // Get list of users to chat with (ONLY following users + users with existing chat history) - OPTIMIZED
 const getChatUsers = async (req, res) => {
     const currentUserId = new mongoose.Types.ObjectId(req.user.userId);
+    console.log(`getChatUsers called by userId=${req.user && req.user.userId}`);
 
     try {
         // First, get users with chat history efficiently

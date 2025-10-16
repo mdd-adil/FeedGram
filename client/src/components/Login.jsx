@@ -3,6 +3,7 @@ import { Container, Form, Button, Card, Alert } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
+import { setTokenWithExpiration } from '../utils/auth';
 
 
 
@@ -24,7 +25,8 @@ const Login = () => {
       // Store the JWT token, typically in localStorage or a cookielocal
       // console.log(response.data)
       
-      localStorage.setItem("token",response.data.token)
+      // Store token with 30-day expiration
+      setTokenWithExpiration(response.data.token);
       
       navigate('/home')
     } catch (error) {

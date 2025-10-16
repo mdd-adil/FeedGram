@@ -4,6 +4,7 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
+import { isTokenValid, removeToken, getToken } from '../utils/auth';
 
 const Chat = () => {
   const navigate = useNavigate();
@@ -39,12 +40,12 @@ const Chat = () => {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!isTokenValid()) {
       navigate('/login');
       return;
     }
 
+    const token = getToken();
     const userId = getCurrentUser();
     setCurrentUser(userId);
 

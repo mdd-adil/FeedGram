@@ -69,8 +69,13 @@ const corsOptions = {
     /^https:\/\/.*\.onrender\.com$/
   ],
   credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  exposedHeaders: ["Authorization"]
 };
 app.use(cors(corsOptions));
+// Enable pre-flight across the board
+app.options('*', cors(corsOptions));
 
 
 
@@ -192,7 +197,7 @@ app.get('/',(req,res)=>{
     res.send("API is running....");
 });
 
-server.listen(5000,(err)=>{
-    if(err) console.log(err);
-    else console.log(`Server is running on port ${PORT} with Socket.io`);
-})
+server.listen(PORT, (err) => {
+  if (err) console.log(err);
+  else console.log(`Server is running on port ${PORT} with Socket.io`);
+});

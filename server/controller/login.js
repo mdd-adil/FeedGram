@@ -19,8 +19,13 @@ try {
     if (!isPasswordValid) {
         return res.status(401).send({ message: 'Invalid email or password' });
     }
-    const token = jwt.sign({ userId: user._id ,email:user.email}, process.env.SECRET, { expiresIn: '1h' });
-    res.cookie('token', token);
+    const token = jwt.sign({ userId: user._id ,email:user.email}, process.env.SECRET, { expiresIn: '30d' });
+    res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days in milliseconds
+    });
     res.send({ token });
 } catch (error) {
     console.error('Login error:', error.message);

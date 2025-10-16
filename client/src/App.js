@@ -13,6 +13,7 @@ import EditPost from "./components/EditPost";
 import ForgotPassword from "./components/ForgotPassword";
 import ResetPassword from "./components/ResetPassword";
 import Chat from "./components/Chat";
+import { isTokenValid } from "./utils/auth";
 
 
 function App() {
@@ -29,9 +30,9 @@ function App() {
           <Route path="/chat" element={<Chat />} />
           <Route path="/chat/:userId" element={<Chat />} />
           </Route>
-          <Route path='/' element={<Navigate to="/login" />} />
-          <Route path='/login' element={<Login />} />
-          <Route path='/signup' element={<Register />} />
+          <Route path='/' element={isTokenValid() ? <Navigate to="/home" /> : <Navigate to="/login" />} />
+          <Route path='/login' element={isTokenValid() ? <Navigate to="/home" /> : <Login />} />
+          <Route path='/signup' element={isTokenValid() ? <Navigate to="/home" /> : <Register />} />
           <Route path='/forgot-password' element={<ForgotPassword />} />
           <Route path='/reset-password/:token' element={<ResetPassword />} />
           <Route path="*" element={<Navigate to="/home" />} />

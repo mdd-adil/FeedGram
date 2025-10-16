@@ -4,6 +4,7 @@ import { useNavigate,Navigate } from "react-router-dom";
 import axios from "axios";
 import Post from "./Post";
 import { API_BASE_URL } from "../config/api";
+import { removeToken } from "../utils/auth";
 
 
 const Profile = () => {
@@ -342,12 +343,12 @@ const Profile = () => {
        },
        withCredentials: true
      });
-     localStorage.removeItem("token");
+     removeToken(); // Remove token and expiration
      navigate("/login");
    } catch (error) {
      console.error("Logout error:", error);
-     // localStorage.removeItem("token");
-     // navigate("/login");
+     removeToken(); // Still remove token even if logout API fails
+     navigate("/login");
    }
  };
 
