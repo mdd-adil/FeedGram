@@ -21,11 +21,12 @@ const post = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Handle image upload
-    let imageData = null;
+    // Handle image upload - Cloudinary returns URL directly
+    let imageUrl = null;
+    let cloudinaryId = null;
     if (req.file) {
-      // Convert buffer to base64
-      imageData = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      imageUrl = req.file.path; // Cloudinary URL
+      cloudinaryId = req.file.filename; // Cloudinary public_id for deletion
     }
 
     const newPost = await postModel.create({
@@ -33,7 +34,8 @@ const post = async (req, res) => {
       content,
       user: userIdObj,
       username: user.username,
-      image: imageData
+      image: imageUrl,
+      cloudinaryId: cloudinaryId
     });
     if (!user) {
       return res.status(404).json({ message: "User not found" });

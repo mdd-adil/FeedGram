@@ -1,5 +1,3 @@
-const express = require('express');
-const router = express.Router();
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const userModel = require('../models/userModel');
@@ -18,6 +16,12 @@ const forgotPassword = async (req, res) => {
             return res.status(404).json({ message: 'No account with that email address exists.' });
         }
 
+        // Check if email credentials are configured
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            console.error('Missing EMAIL_USER or EMAIL_PASS environment variables');
+            return res.status(500).json({ message: 'Email service not configured. Please contact support.' });
+        }
+
         // Generate reset token
         const resetToken = crypto.randomBytes(32).toString('hex');
         
@@ -29,15 +33,31 @@ const forgotPassword = async (req, res) => {
 
         // Create transporter for sending email
         const transporter = nodemailer.createTransport({
-            service: 'gmail',
+            host: 'smtp.gmail.com',
+            port: 587,
+            secure: false,
             auth: {
-                user: process.env.EMAIL_USER, // Your email
-                pass: process.env.EMAIL_PASS  // Your email password or app password
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS
+            },
+            tls: {
+                rejectUnauthorized: false
             }
         });
 
+        // Verify SMTP connection
+        try {
+            await transporter.verify();
+            console.log('SMTP connection verified successfully');
+        } catch (verifyError) {
+            console.error('SMTP Verification Error:', verifyError.message);
+            return res.status(500).json({ 
+                message: 'Email service authentication failed. Please check EMAIL_USER and EMAIL_PASS.' 
+            });
+        }
+
         // Email content
-        const resetUrl = `https://feedgram-frontende.onrender.com/reset-password/:${resetToken}`;
+        const resetUrl = `https://feedgram-frontende.onrender.com/reset-password/${resetToken}`;
         
         const mailOptions = {
             to: user.email,

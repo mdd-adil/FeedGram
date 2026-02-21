@@ -24,7 +24,11 @@ trim:true
         trim: true,
     },
     image: {
-        type: String, // Store base64 image data
+        type: String, // Cloudinary URL
+        default: null
+    },
+    cloudinaryId: {
+        type: String, // Cloudinary public_id for deletion
         default: null
     },
     likes:[ {

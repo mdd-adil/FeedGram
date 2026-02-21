@@ -18,7 +18,11 @@ const userSchema = new mongoose.Schema({
         required: true,
     },
     avatar: {
-        type: String, // Store base64 image data
+        type: String, // Cloudinary URL
+        default: null
+    },
+    avatarCloudinaryId: {
+        type: String, // Cloudinary public_id for deletion
         default: null
     },
     post: {

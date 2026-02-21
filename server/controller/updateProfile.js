@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const userModel = require('../models/userModel');
+const { cloudinary } = require('../config/cloudinary');
 
 const updateProfile = async (req, res) => {
     const userId = req.user.userId;
@@ -17,16 +18,27 @@ const updateProfile = async (req, res) => {
             return res.status(404).json({ message: "User not found" });
         }
 
-        // Handle profile picture upload
-        let avatarData = user.avatar; // Keep existing avatar if no new one
+        // Handle profile picture upload - Cloudinary returns URL directly
+        let avatarUrl = user.avatar; // Keep existing avatar if no new one
+        let avatarCloudinaryId = user.avatarCloudinaryId;
+        
         if (req.file) {
-            // Convert buffer to base64
-            avatarData = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+            // Delete old avatar from Cloudinary if exists
+            if (user.avatarCloudinaryId) {
+                try {
+                    await cloudinary.uploader.destroy(user.avatarCloudinaryId);
+                } catch (err) {
+                    console.log('Error deleting old avatar:', err.message);
+                }
+            }
+            avatarUrl = req.file.path; // Cloudinary URL
+            avatarCloudinaryId = req.file.filename; // Cloudinary public_id
         }
 
         // Update user fields
         const updateData = {
-            avatar: avatarData
+            avatar: avatarUrl,
+            avatarCloudinaryId: avatarCloudinaryId
         };
 
         if (username) updateData.username = username;

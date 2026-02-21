@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Post = require('../models/postModel');
 const User = require('../models/userModel');
+const { cloudinary } = require('../config/cloudinary');
 
 const deletePost = async (req, res) => {
     const postId = req.params.id;
@@ -18,6 +19,15 @@ const deletePost = async (req, res) => {
 
         if (post.user.toString() !== userId) {
             return res.status(403).json({ message: 'You are not authorized to delete this post' });
+        }
+
+        // Delete image from Cloudinary if exists
+        if (post.cloudinaryId) {
+            try {
+                await cloudinary.uploader.destroy(post.cloudinaryId);
+            } catch (err) {
+                console.log('Error deleting image from Cloudinary:', err.message);
+            }
         }
 
         await Post.findByIdAndDelete(postId);
