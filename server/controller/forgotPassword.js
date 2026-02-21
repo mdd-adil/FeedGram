@@ -37,7 +37,7 @@ const forgotPassword = async (req, res) => {
         });
 
         // Email content
-        const resetUrl = `https://feedgram-frontende.onrender.com/reset-password/${resetToken}`;
+        const resetUrl = `https://feedgram-frontende.onrender.com/reset-password/:${resetToken}`;
         
         const mailOptions = {
             to: user.email,

@@ -96,7 +96,7 @@ app.use('/deletePost', deletePostRoute);
 app.use('/updatePost', updatePostRoute);
 app.use('/chat', chatRoute);
 app.use('/forgot-password', forgotPasswordRoute);
-app.use('/reset-password', resetPasswordRoute);
+app.use('/reset-password/:token', resetPasswordRoute);
 app.use('/user-profile', UserProfile);
 app.use('/follow', followRoute);
 app.use('/search', searchRoute);
