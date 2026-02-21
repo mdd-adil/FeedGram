@@ -27,10 +27,8 @@ const SignUp = () => {
       
       navigate('/login')
     } catch (error) {
-      // setMessage(error.response.data.message || 'Login failed.');
-    
-      setError(error.message)
-      console.error('Login error:', error);
+      setError(error.response?.data?.message || 'Registration failed.');
+      console.error('Registration error:', error);
     }
   };
 

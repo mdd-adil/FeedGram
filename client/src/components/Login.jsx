@@ -21,16 +21,16 @@ const Login = () => {
     try {
       // Send the form data to the backend API
       const response = await axios.post(`${API_BASE_URL}/login`,{"email":email,"password":password});
-      // setError(response.data.message);
-      // Store the JWT token, typically in localStorage or a cookielocal
-      // console.log(response.data)
       
-      // Store token with 30-day expiration
-      setTokenWithExpiration(response.data.token);
-      
-      navigate('/home')
+      if (response?.data?.token) {
+        // Store token with 30-day expiration
+        setTokenWithExpiration(response.data.token);
+        navigate('/home');
+      } else {
+        setError('Invalid response from server. Please try again.');
+      }
     } catch (error) {
-      setError(error.response.data.message || 'Login failed.');
+      setError(error.response?.data?.message || 'Login failed.');
     
       console.error('Login error:', error);
     }
