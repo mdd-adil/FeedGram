@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Container, Form, Button, Card, Alert } from "react-bootstrap";
+import { Container, Form, Button, Card, Alert, InputGroup } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
@@ -7,9 +7,10 @@ import { setTokenWithExpiration } from '../utils/auth';
 
 
 
+
 const Login = () => {
   const navigate = useNavigate();
-  
+  const[show,setShow]=useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -39,7 +40,9 @@ const Login = () => {
     // Simulate API call
    
   };
-
+function togglePasswordVisibility() {
+  setShow(!show);
+}
   return (
     <div style={{ 
       minHeight: "100vh", 
@@ -76,15 +79,29 @@ const Login = () => {
 
                   <Form.Group className="mb-4">
                     <Form.Label className="fw-semibold">Password</Form.Label>
-                    <Form.Control
-                      type="password"
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="py-2"
-                      style={{ borderRadius: "10px" }}
-                    />
+                    <InputGroup>
+                      <Form.Control
+                        type={show ? "text" : "password"}
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className="py-2"
+                        style={{ borderRadius: "10px 0 0 10px", borderRight: "none" }}
+                      />
+                      <Button
+                        variant=""
+                        onClick={togglePasswordVisibility}
+                        style={{ 
+                          borderRadius: "0 10px 10px 0", 
+                          border: "1px solid #ced4da",
+                          borderLeft: "none",
+                          background: "transparent" 
+                        }}
+                      >
+                        {show ? '🙈' : '👁️'}
+                      </Button>
+                    </InputGroup>
                   </Form.Group>
 
                   {/* <Form.Group className="mb-4">
