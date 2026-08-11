@@ -4,10 +4,20 @@ import { useNavigate } from "react-router-dom";
 import FeedPost from "./FeedPost";
 import { API_BASE_URL } from "../config/api";
 
+const POSTS_CACHE_KEY = "home_posts_cache";
+const USER_CACHE_KEY = "home_user_cache";
+
 const Home = () => {
   const navigate = useNavigate();
   const [posts, setPosts] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const cachedUser = sessionStorage.getItem(USER_CACHE_KEY);
+      return cachedUser ? JSON.parse(cachedUser) : null;
+    } catch (error) {
+      return null;
+    }
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -28,6 +38,33 @@ const Home = () => {
     return null;
   };
 
+  const getCachedPosts = () => {
+    try {
+      const cachedPosts = sessionStorage.getItem(POSTS_CACHE_KEY);
+      return cachedPosts ? JSON.parse(cachedPosts) : null;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const cachePosts = (nextPosts) => {
+    try {
+      sessionStorage.setItem(POSTS_CACHE_KEY, JSON.stringify(nextPosts));
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const cacheCurrentUser = (nextUser) => {
+    try {
+      if (nextUser) {
+        sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(nextUser));
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   // Fetch posts from backend
   const fetchPosts = async () => {
     try {
@@ -37,7 +74,9 @@ const Home = () => {
         }
       });
       const data = await response.json();
-      setPosts(data.posts || data); // Handle both paginated and simple response
+      const nextPosts = data.posts || data;
+      setPosts(nextPosts); // Handle both paginated and simple response
+      cachePosts(nextPosts);
     } catch (err) {
       console.log(err);
     }
@@ -53,6 +92,7 @@ const Home = () => {
       });
       const data = await response.json();
       setCurrentUser(data.user);
+      cacheCurrentUser(data.user);
     } catch (err) {
       console.log(err);
     }
@@ -199,12 +239,25 @@ const Home = () => {
   // Handle delete post functionality
   const handleDeletePost = (postId) => {
     // Remove post from UI immediately
-    setPosts(prevPosts => prevPosts.filter(post => post._id !== postId));
+    setPosts(prevPosts => {
+      const nextPosts = prevPosts.filter(post => post._id !== postId);
+      cachePosts(nextPosts);
+      return nextPosts;
+    });
   };
 
   useEffect(() => {
-    fetchPosts();
-    fetchCurrentUser();
+    const cachedPosts = getCachedPosts();
+
+    if (cachedPosts) {
+      setPosts(cachedPosts);
+    } else {
+      fetchPosts();
+    }
+
+    if (!currentUser) {
+      fetchCurrentUser();
+    }
   }, []);
 
   // Close search results when clicking outside
@@ -236,6 +289,8 @@ const Home = () => {
       return;
     }
     localStorage.removeItem("token");
+    sessionStorage.removeItem(POSTS_CACHE_KEY);
+    sessionStorage.removeItem(USER_CACHE_KEY);
     navigate("/login");
   };
 
