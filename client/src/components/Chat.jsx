@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Container, Row, Col, Card, Button, Form, ListGroup, Badge, Image } from 'react-bootstrap';
+import { Container, Row, Col, Card, Form, ListGroup, Badge, Image, Spinner } from 'react-bootstrap';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/api';
-import { isTokenValid, removeToken, getToken } from '../utils/auth';
+import { isTokenValid, getToken } from '../utils/auth';
 
 const Chat = () => {
   const navigate = useNavigate();
@@ -25,179 +25,39 @@ const Chat = () => {
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  // Get current user info
-  const getCurrentUser = () => {
+  const getCurrentUser = useCallback(() => {
     const token = localStorage.getItem('token');
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         return payload.userId;
-      } catch (error) {
+      } catch {
         return null;
       }
     }
     return null;
-  };
+  }, []);
 
-  useEffect(() => {
-    if (!isTokenValid()) {
-      navigate('/login');
-      return;
-    }
-
-    const token = getToken();
-    const userId = getCurrentUser();
-    setCurrentUser(userId);
-
-    // Initialize socket connection with optimized settings
-    const newSocket = io(API_BASE_URL, {
-      transports: ['websocket', 'polling'],
-      timeout: 5000,
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
-      autoConnect: true,
-      forceNew: false
-    });
-    setSocket(newSocket);
-
-    // Authenticate with server
-    newSocket.emit('authenticate', token);
-
-    // Handle authentication success with timeout
-    newSocket.on('authSuccess', (data) => {
-      console.log('Authentication successful');
-      setIsAuthenticated(true);
-    });
-
-    // Handle authentication errors
-    newSocket.on('authError', (error) => {
-      console.error('Authentication error:', error);
-      setIsAuthenticated(false);
-      localStorage.removeItem('token');
-      navigate('/login');
-    });
-
-    // Add connection status listeners
-    newSocket.on('connect', () => {
-      console.log('Socket connected');
-    });
-
-    newSocket.on('disconnect', () => {
-      console.log('Socket disconnected');
-      setIsAuthenticated(false);
-    });
-
-    newSocket.on('connect_error', (error) => {
-      console.error('Connection error:', error);
-    });
-
-    // Handle message errors
-    newSocket.on('messageError', (error) => {
-      console.error('Message error:', error);
-      alert('Failed to send message: ' + error);
-    });
-
-    // Listen for new messages with optimized handling
-    newSocket.on('newMessage', (message) => {
-      setMessages(prev => {
-        // Remove any optimistic message with similar content
-        const filteredMessages = prev.filter(msg => {
-          if (msg.isOptimistic && 
-              msg.message === message.message && 
-              msg.sender._id === message.sender._id) {
-            return false; // Remove optimistic message
-          }
-          return true;
-        });
-        
-        // Check if real message already exists
-        const messageExists = filteredMessages.some(msg => msg._id === message._id);
-        if (messageExists) return prev;
-        
-        return [...filteredMessages, message];
+  const refreshUserList = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/chat/users`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      
-      // Refresh user list only if message involves current user
-      if (message.sender._id === currentUser || message.receiver._id === currentUser) {
-        setTimeout(() => refreshUserList(), 100); // Debounce refresh
-      }
-    });
-
-    // Listen for typing indicators
-    newSocket.on('userTyping', (data) => {
-      if (data.userId !== userId) {
-        setTypingUser(data.isTyping ? data.userId : null);
-      }
-    });
-
-    // Fetch list of users
-    fetchUsers();
-
-    return () => {
-      newSocket.disconnect();
-    };
-  }, [navigate]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Separate useEffect to handle direct messaging from URL parameters
-  useEffect(() => {
-    const handleDirectMessage = async () => {
-      if (!isSelectingUser) {
-        const urlParams = new URLSearchParams(location.search);
-        const queryUserId = urlParams.get('userId');
-        const directMessageUserId = paramUserId || queryUserId;
-        
-        if (directMessageUserId && !selectedUser) {
-          // First check if user is in the following/chat history list
-          let userToMessage = users.find(user => user._id === directMessageUserId);
-          
-          if (!userToMessage) {
-            // If not in list, fetch the specific user for temporary chat
-            // But DON'T add them to the persistent users list
-            try {
-              const token = localStorage.getItem('token');
-              const response = await axios.get(`${API_BASE_URL}/chat/user/${directMessageUserId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-              });
-              userToMessage = response.data.user;
-              
-              // Mark this as a temporary user (not added to main list)
-              userToMessage.isTemporary = true;
-            } catch (error) {
-              console.error('Error fetching direct message user:', error);
-              return;
-            }
-          }
-          
-          if (userToMessage) {
-            setIsSelectingUser(true);
-            selectUser(userToMessage).finally(() => {
-              setIsSelectingUser(false);
-              // Clear URL parameters after selecting user to prevent repeated selections
-              if (queryUserId) {
-                navigate('/chat', { replace: true });
-              }
-            });
-          }
-        }
-      }
-    };
-
-    handleDirectMessage();
-  }, [users, location.search, paramUserId, selectedUser, isSelectingUser]);
+      setUsers(response.data.users || []);
+    } catch (error) {
+      console.error('Error refreshing users:', error);
+    }
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     try {
       setIsLoadingUsers(true);
       const token = localStorage.getItem('token');
       const response = await axios.get(`${API_BASE_URL}/chat/users`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
-      setUsers(response.data.users);
+      setUsers(response.data.users || []);
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -209,193 +69,264 @@ const Chat = () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(`${API_BASE_URL}/chat/history/${userId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
-      setMessages(response.data.messages);
-      
-      // Mark messages as read
+      setMessages(response.data.messages || []);
+
       await axios.put(`${API_BASE_URL}/chat/read/${userId}`, {}, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
-      // Refresh user list to update unread count (without triggering URL par`eter logic)
       refreshUserList();
     } catch (error) {
       console.error('Error fetching chat history:', error);
     }
-  }, []);
-
-  const refreshUserList = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/chat/users`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      // Only update the persistent users list
-      // Keep any temporary user if currently selected
-      const persistentUsers = response.data.users;
-      if (selectedUser && selectedUser.isTemporary) {
-        // If a temporary user is selected, don't replace the list completely
-        setUsers(persistentUsers);
-      } else {
-        setUsers(persistentUsers);
-      }
-    } catch (error) {
-      console.error('Error refreshing users:', error);
-    }
-  }, [selectedUser]);
+  }, [refreshUserList]);
 
   const selectUser = useCallback(async (user) => {
     setSelectedUser(user);
     setMessages([]);
-    
-    // Show notice if this is a temporary user (not followed, no chat history)
+
     if (user.isTemporary || (!user.isFollowing && !user.chatHistory)) {
       setShowTemporaryUserNotice(true);
     } else {
       setShowTemporaryUserNotice(false);
     }
-    
+
     await fetchChatHistory(user._id);
-    
-    // Join chat room only if authenticated
-    if (socket && isAuthenticated) {
+
+    if (socket && isAuthenticated && currentUser) {
       const chatId = [currentUser, user._id].sort().join('_');
       socket.emit('joinChat', chatId);
     }
   }, [fetchChatHistory, socket, isAuthenticated, currentUser]);
 
+  useEffect(() => {
+    if (!isTokenValid()) {
+      navigate('/login');
+      return;
+    }
+
+    const token = getToken();
+    const userId = getCurrentUser();
+    setCurrentUser(userId);
+
+    const newSocket = io(API_BASE_URL, {
+      transports: ['websocket', 'polling'],
+      timeout: 5000,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      autoConnect: true,
+      forceNew: false
+    });
+    setSocket(newSocket);
+
+    newSocket.emit('authenticate', token);
+
+    newSocket.on('authSuccess', () => {
+      setIsAuthenticated(true);
+    });
+
+    newSocket.on('authError', (error) => {
+      console.error('Authentication error:', error);
+      setIsAuthenticated(false);
+      localStorage.removeItem('token');
+      navigate('/login');
+    });
+
+    newSocket.on('disconnect', () => {
+      setIsAuthenticated(false);
+    });
+
+    newSocket.on('newMessage', (message) => {
+      setMessages((prev) => {
+        const filtered = prev.filter(
+          (msg) =>
+            !(
+              msg.isOptimistic &&
+              msg.message === message.message &&
+              msg.sender?._id === message.sender?._id
+            )
+        );
+        if (filtered.some((m) => m._id === message._id)) return prev;
+        return [...filtered, message];
+      });
+
+      if (message.sender?._id === userId || message.receiver?._id === userId) {
+        setTimeout(() => refreshUserList(), 150);
+      }
+    });
+
+    newSocket.on('userTyping', (data) => {
+      if (data.userId !== userId) {
+        setTypingUser(data.isTyping ? data.userId : null);
+      }
+    });
+
+    fetchUsers();
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [navigate, getCurrentUser, fetchUsers, refreshUserList]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Handle direct messaging from URL params or route param
+  useEffect(() => {
+    const handleDirectMessage = async () => {
+      if (isSelectingUser) return;
+      const urlParams = new URLSearchParams(location.search);
+      const queryUserId = urlParams.get('userId');
+      const directMessageUserId = paramUserId || queryUserId;
+
+      if (directMessageUserId && !selectedUser) {
+        let userToMessage = users.find((u) => u._id === directMessageUserId);
+
+        if (!userToMessage) {
+          try {
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_BASE_URL}/chat/user/${directMessageUserId}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            userToMessage = res.data.user;
+            if (userToMessage) userToMessage.isTemporary = true;
+          } catch (err) {
+            console.error('Error fetching direct message user:', err);
+            return;
+          }
+        }
+
+        if (userToMessage) {
+          setIsSelectingUser(true);
+          selectUser(userToMessage).finally(() => {
+            setIsSelectingUser(false);
+            if (queryUserId) {
+              navigate('/chat', { replace: true });
+            }
+          });
+        }
+      }
+    };
+
+    handleDirectMessage();
+  }, [users, location.search, paramUserId, selectedUser, isSelectingUser, navigate, selectUser]);
+
   const sendMessage = useCallback(() => {
-    if (newMessage.trim() && selectedUser && socket && isAuthenticated) {
+    if (newMessage.trim() && selectedUser && socket && isAuthenticated && currentUser) {
       const messageText = newMessage.trim();
-      const tempId = Date.now().toString(); // Temporary ID for optimistic update
-      
-      // Optimistic UI update - add message immediately
+      const tempId = Date.now().toString();
+
       const optimisticMessage = {
         _id: tempId,
         message: messageText,
         sender: { _id: currentUser },
         receiver: { _id: selectedUser._id },
         timestamp: new Date().toISOString(),
-        isOptimistic: true // Flag to identify temporary message
+        isOptimistic: true
       };
-      
-      setMessages(prev => [...prev, optimisticMessage]);
+
+      setMessages((prev) => [...prev, optimisticMessage]);
       setNewMessage('');
-      
-      // Send message to server
+
       socket.emit('sendMessage', {
         receiverId: selectedUser._id,
         message: messageText
       });
-      
-      // Stop typing indicator
+
       socket.emit('typing', {
         receiverId: selectedUser._id,
         isTyping: false
       });
-    } else if (!isAuthenticated) {
-      alert('Please wait for authentication to complete');
     }
   }, [newMessage, selectedUser, socket, isAuthenticated, currentUser]);
 
-  const handleTyping = useCallback((e) => {
-    setNewMessage(e.target.value);
-    
-    if (selectedUser && socket && isAuthenticated) {
-      if (!isTyping) {
-        setIsTyping(true);
-        socket.emit('typing', {
-          receiverId: selectedUser._id,
-          isTyping: true
-        });
+  const handleTyping = useCallback(
+    (e) => {
+      setNewMessage(e.target.value);
+
+      if (selectedUser && socket && isAuthenticated) {
+        if (!isTyping) {
+          setIsTyping(true);
+          socket.emit('typing', {
+            receiverId: selectedUser._id,
+            isTyping: true
+          });
+        }
+
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsTyping(false);
+          socket.emit('typing', {
+            receiverId: selectedUser._id,
+            isTyping: false
+          });
+        }, 1000);
       }
-
-      // Clear existing timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      // Set new timeout
-      typingTimeoutRef.current = setTimeout(() => {
-        setIsTyping(false);
-        socket.emit('typing', {
-          receiverId: selectedUser._id,
-          isTyping: false
-        });
-      }, 1000);
-    }
-  }, [selectedUser, socket, isAuthenticated, isTyping]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+    },
+    [selectedUser, socket, isAuthenticated, isTyping]
+  );
 
   const formatTime = useCallback((timestamp) => {
+    if (!timestamp) return '';
     const now = new Date();
     const messageTime = new Date(timestamp);
     const diffInMs = now - messageTime;
     const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
     if (diffInDays === 0) {
-      // Today - show time
       return messageTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } else if (diffInDays === 1) {
-      // Yesterday
       return 'Yesterday';
     } else if (diffInDays < 7) {
-      // This week - show day name
       return messageTime.toLocaleDateString([], { weekday: 'short' });
-    } else {
-      // Older - show date
-      return messageTime.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
+    return messageTime.toLocaleDateString([], { month: 'short', day: 'numeric' });
   }, []);
 
   const getAvatarSrc = useCallback((user) => {
-    if (user?.avatar) {
-      return user.avatar;
-    }
+    if (user?.avatar) return user.avatar;
     const username = user?.username || 'User';
     return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
   }, []);
 
   const formatMessageTime = useCallback((timestamp) => {
+    if (!timestamp) return '';
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }, []);
 
-  // Memoized message list component for better performance
   const MessageList = useMemo(() => {
-    return messages.map((message, index) => (
-      <div
-        key={index}
-        className={`d-flex mb-3 ${
-          message.sender._id === currentUser ? 'justify-content-end' : 'justify-content-start'
-        }`}
-      >
+    return messages.map((message, index) => {
+      const isSender = message.sender?._id === currentUser;
+      return (
         <div
-          className={`p-2 rounded-3 max-width-75 ${
-            message.sender._id === currentUser
-              ? 'bg-primary text-white'
-              : 'bg-light text-dark'
-          }`}
-          style={{ maxWidth: '75%' }}
+          key={message._id || index}
+          className={`d-flex mb-2 ${isSender ? 'justify-content-end' : 'justify-content-start'}`}
         >
-          <div>{message.message}</div>
-          <small 
-            className={`d-block mt-1 ${
-              message.sender._id === currentUser ? 'text-white-50' : 'text-muted'
-            }`}
-          >
-            {formatMessageTime(message.timestamp)}
-          </small>
+          <div className={isSender ? 'chat-bubble-sender' : 'chat-bubble-receiver'}>
+            <div>{message.message}</div>
+            <small
+              className="d-block mt-1"
+              style={{
+                fontSize: '0.7rem',
+                opacity: 0.75,
+                textAlign: isSender ? 'right' : 'left'
+              }}
+            >
+              {formatMessageTime(message.timestamp)}
+            </small>
+          </div>
         </div>
-      </div>
-    ));
+      );
+    });
   }, [messages, currentUser, formatMessageTime]);
 
-  // Memoize expensive computations
   const sortedUsers = useMemo(() => {
     return [...users].sort((a, b) => {
       if (!a.lastMessage && !b.lastMessage) return 0;
@@ -406,209 +337,276 @@ const Chat = () => {
   }, [users]);
 
   return (
-    <div style={{ 
-      minHeight: "100vh", 
-      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      padding: "20px"
-    }}>
-      <Container fluid>
-        <Row className="min-h-100">
-          {/* Sidebar - Users List */}
-          <Col md={4} lg={3} className="pe-0">
-            <Card className="h-100 shadow-lg border-0" style={{ borderRadius: "15px" }}>
-              <Card.Header className="text-white py-3" style={{
-                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                borderRadius: "15px 15px 0 0"
-              }}>
-                <div className="d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0">Chats</h5>
-                  <Button 
-                    variant="outline-light" 
-                    size="sm" 
-                    onClick={() => navigate(-1)}
-                  >
-                    Back
-                  </Button>
-                </div>
-              </Card.Header>
-              <Card.Body className="p-0">
+    <div className="app-container">
+      {/* Minimal Header */}
+      <header className="navbar-minimal">
+        <Container className="d-flex align-items-center justify-content-between">
+          <div
+            className="brand-title cursor-pointer"
+            onClick={() => navigate('/home')}
+          >
+            <span className="brand-dot"></span>
+            <span>FeedGram</span>
+          </div>
+
+          <div className="d-flex align-items-center gap-2">
+            <button
+              className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+              onClick={() => navigate('/home')}
+            >
+              ← Back to Feed
+            </button>
+          </div>
+        </Container>
+      </header>
+
+      {/* Main Chat Area */}
+      <main className="container py-3" style={{ maxWidth: '1000px' }}>
+        <div className="chat-window">
+          <Row className="g-0 h-100">
+            {/* Sidebar User List */}
+            <Col md={5} lg={4} className="chat-sidebar">
+              <div
+                style={{
+                  padding: '1rem',
+                  borderBottom: '1px solid var(--border-subtle)',
+                  fontWeight: 600,
+                  fontSize: '0.95rem'
+                }}
+              >
+                Conversations
+              </div>
+
+              <div style={{ flexGrow: 1, overflowY: 'auto' }}>
                 {isLoadingUsers ? (
                   <div className="text-center p-4">
-                    <div className="spinner-border text-primary" role="status">
-                      <span className="visually-hidden">Loading...</span>
-                    </div>
-                    <p className="mt-2 text-muted">Loading conversations...</p>
+                    <Spinner animation="border" size="sm" variant="dark" />
+                    <p
+                      className="mt-2 mb-0"
+                      style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}
+                    >
+                      Loading conversations...
+                    </p>
                   </div>
-                ) : users.length === 0 ? (
+                ) : sortedUsers.length === 0 ? (
                   <div className="text-center p-4">
-                    <p className="text-muted">No conversations yet</p>
-                    <small className="text-muted">
-                      Follow someone and send them a message to start chatting!
-                      <br />
-                      Or click the Message button on their profile.
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                      No conversations yet
+                    </p>
+                    <small style={{ color: 'var(--text-subtle)', fontSize: '0.8rem' }}>
+                      Message someone from their profile or a feed post!
                     </small>
                   </div>
                 ) : (
                   <ListGroup variant="flush">
-                  {sortedUsers.map(user => (
-                    <ListGroup.Item
-                      key={user._id}
-                      action
-                      active={selectedUser?._id === user._id}
-                      onClick={() => selectUser(user)}
-                      className="d-flex align-items-center p-3"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <div className="position-relative">
-                        <Image
-                          src={getAvatarSrc(user)}
-                          roundedCircle
-                          style={{ 
-                            width: "50px", 
-                            height: "50px",
-                            objectFit: "cover"
-                          }}
-                        />
-                        {user.unreadCount > 0 && (
-                          <Badge 
-                            bg="danger" 
-                            pill 
-                            className="position-absolute top-0 start-100 translate-middle"
-                            style={{ fontSize: "0.7rem" }}
-                          >
-                            {user.unreadCount > 99 ? '99+' : user.unreadCount}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex-grow-1 ms-3 overflow-hidden">
-                        <div className="d-flex justify-content-between align-items-start">
-                          <div className="d-flex align-items-center">
-                            <div className="fw-bold text-truncate">{user.username}</div>
-                            {user.isFollowing && (
-                              <Badge 
-                                bg="success" 
-                                className="ms-2" 
-                                style={{ fontSize: "0.6rem" }}
+                    {sortedUsers.map((user) => (
+                      <div
+                        key={user._id}
+                        onClick={() => selectUser(user)}
+                        className={`chat-user-item ${selectedUser?._id === user._id ? 'active' : ''}`}
+                      >
+                        <div className="position-relative">
+                          <Image
+                            src={getAvatarSrc(user)}
+                            roundedCircle
+                            style={{
+                              width: '42px',
+                              height: '42px',
+                              objectFit: 'cover',
+                              border: '1px solid var(--border-subtle)'
+                            }}
+                          />
+                          {user.unreadCount > 0 && (
+                            <Badge
+                              bg="danger"
+                              pill
+                              className="position-absolute top-0 start-100 translate-middle"
+                              style={{ fontSize: '0.65rem' }}
+                            >
+                              {user.unreadCount > 99 ? '99+' : user.unreadCount}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="flex-grow-1 overflow-hidden">
+                          <div className="d-flex justify-content-between align-items-baseline">
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                fontSize: '0.875rem',
+                                color: 'var(--text-primary)'
+                              }}
+                              className="text-truncate"
+                            >
+                              {user.username}
+                            </span>
+                            {user.lastMessage && (
+                              <span
+                                style={{
+                                  fontSize: '0.75rem',
+                                  color: 'var(--text-muted)',
+                                  flexShrink: 0,
+                                  marginLeft: '4px'
+                                }}
                               >
-                                Following
-                              </Badge>
+                                {formatTime(user.lastMessage.timestamp)}
+                              </span>
                             )}
                           </div>
-                          {user.lastMessage && (
-                            <small className="text-muted flex-shrink-0 ms-2">
-                              {formatTime(user.lastMessage.timestamp)}
-                            </small>
-                          )}
-                        </div>
-                        <div className="text-muted small text-truncate">
-                          {user.lastMessage ? (
-                            <>
-                              {user.lastMessage.senderId === currentUser ? 'You: ' : ''}
-                              {user.lastMessage.message}
-                            </>
-                          ) : (
-                            'Start a conversation'
-                          )}
+                          <div
+                            style={{
+                              fontSize: '0.8rem',
+                              color: 'var(--text-muted)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            {user.lastMessage ? (
+                              <>
+                                {user.lastMessage.senderId === currentUser ? 'You: ' : ''}
+                                {user.lastMessage.message}
+                              </>
+                            ) : (
+                              'Start chatting'
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </ListGroup.Item>
-                  ))}
+                    ))}
                   </ListGroup>
                 )}
-              </Card.Body>
-            </Card>
-          </Col>
+              </div>
+            </Col>
 
-          {/* Chat Area */}
-          <Col md={8} lg={9} className="ps-2">
-            <Card className="h-100 shadow-lg border-0" style={{ borderRadius: "15px" }}>
+            {/* Conversation Messages View */}
+            <Col md={7} lg={8} className="d-flex flex-column h-100">
               {selectedUser ? (
                 <>
-                  {/* Chat Header */}
-                  <Card.Header className="text-white py-3" style={{
-                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                    borderRadius: "15px 15px 0 0"
-                  }}>
-                    <div className="d-flex align-items-center">
+                  {/* Active Chat Header */}
+                  <div
+                    className="d-flex align-items-center justify-content-between"
+                    style={{
+                      padding: '0.85rem 1.25rem',
+                      borderBottom: '1px solid var(--border-subtle)',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
+                    <div
+                      className="d-flex align-items-center gap-2 cursor-pointer"
+                      onClick={() => navigate(`/user/${selectedUser._id}`)}
+                    >
                       <Image
                         src={getAvatarSrc(selectedUser)}
                         roundedCircle
-                        style={{ 
-                          width: "40px", 
-                          height: "40px",
-                          marginRight: "12px",
-                          objectFit: "cover"
+                        style={{
+                          width: '38px',
+                          height: '38px',
+                          objectFit: 'cover',
+                          border: '1px solid var(--border-subtle)'
                         }}
                       />
                       <div>
-                        <h6 className="mb-0">{selectedUser.username}</h6>
-                        {typingUser === selectedUser._id && (
-                          <small className="text-light">Typing...</small>
+                        <div style={{ fontWeight: 600, fontSize: '0.9rem', lineHeight: 1.2 }}>
+                          {selectedUser.username}
+                        </div>
+                        {typingUser === selectedUser._id ? (
+                          <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                            typing...
+                          </small>
+                        ) : (
+                          <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                            {selectedUser.isFollowing ? 'Following' : 'Active'}
+                          </small>
                         )}
                       </div>
                     </div>
-                  </Card.Header>
 
-                  {/* Messages Area */}
-                  <Card.Body 
-                    style={{ 
-                      height: '60vh', 
+                    <button
+                      className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+                      onClick={() => navigate(`/user/${selectedUser._id}`)}
+                    >
+                      View Profile
+                    </button>
+                  </div>
+
+                  {/* Messages Feed */}
+                  <div
+                    style={{
+                      flexGrow: 1,
                       overflowY: 'auto',
-                      padding: '20px'
+                      padding: '1.25rem',
+                      backgroundColor: '#ffffff'
                     }}
                   >
-                    {/* Temporary user notice */}
                     {showTemporaryUserNotice && (
-                      <div className="alert alert-info mb-3" style={{ fontSize: '0.9rem' }}>
-                        <i className="bi bi-info-circle me-2"></i>
-                        You're chatting with someone you don't follow. This conversation won't appear in your main chat list unless you follow them or they send you a message.
+                      <div
+                        style={{
+                          fontSize: '0.8rem',
+                          backgroundColor: 'var(--bg-subtle)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '0.65rem 0.9rem',
+                          marginBottom: '1rem',
+                          color: 'var(--text-secondary)'
+                        }}
+                      >
+                        ℹ️ You are chatting with someone you don't follow yet.
                       </div>
                     )}
-                    
+
                     {MessageList}
                     <div ref={messagesEndRef} />
-                  </Card.Body>
+                  </div>
 
-                  {/* Message Input */}
-                  <Card.Footer className="bg-light" style={{ borderRadius: "0 0 15px 15px" }}>
-                    <Form onSubmit={(e) => { e.preventDefault(); sendMessage(); }}>
-                      <div className="d-flex">
-                        <Form.Control
-                          type="text"
-                          placeholder="Type a message..."
-                          value={newMessage}
-                          onChange={handleTyping}
-                          style={{ borderRadius: "25px", marginRight: "10px" }}
-                        />
-                        <Button
-                          type="submit"
-                          style={{ 
-                            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                            border: "none",
-                            borderRadius: "50%",
-                            width: "50px",
-                            height: "50px"
-                          }}
-                          disabled={!newMessage.trim()}
-                        >
-                          📤
-                        </Button>
-                      </div>
+                  {/* Message Input Footer */}
+                  <div
+                    style={{
+                      padding: '0.85rem 1.25rem',
+                      borderTop: '1px solid var(--border-subtle)',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
+                    <Form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        sendMessage();
+                      }}
+                      className="d-flex gap-2"
+                    >
+                      <Form.Control
+                        type="text"
+                        placeholder="Write a message..."
+                        value={newMessage}
+                        onChange={handleTyping}
+                        style={{
+                          borderRadius: 'var(--radius-full)',
+                          padding: '0.55rem 1.15rem'
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        className="btn-minimal btn-minimal-primary"
+                        disabled={!newMessage.trim()}
+                        style={{ padding: '0.55rem 1.25rem' }}
+                      >
+                        Send
+                      </button>
                     </Form>
-                  </Card.Footer>
+                  </div>
                 </>
               ) : (
-                <Card.Body className="d-flex align-items-center justify-content-center">
-                  <div className="text-center text-muted">
-                    <h5>Select a user to start chatting</h5>
-                    <p>Choose someone from the list to begin your conversation</p>
-                  </div>
-                </Card.Body>
+                <div className="h-100 d-flex flex-column align-items-center justify-content-center p-4 text-center">
+                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>💬</div>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Your Messages</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                    Select an existing conversation or message someone directly.
+                  </p>
+                </div>
               )}
-            </Card>
-          </Col>
-        </Row>
-      </Container>
+            </Col>
+          </Row>
+        </div>
+      </main>
     </div>
   );
 };

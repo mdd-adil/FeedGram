@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, Form, Alert } from 'react-bootstrap';
+import { Card, Form, Alert, Spinner, Container } from 'react-bootstrap';
 import { API_BASE_URL } from '../config/api';
 
 const CreatePost = () => {
@@ -15,15 +15,12 @@ const CreatePost = () => {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type
       if (!file.type.startsWith('image/')) {
-        setError("Please select an image file");
+        setError('Please select an image file (PNG, JPG, WEBP)');
         return;
       }
-      
-      // Validate file size (5MB)
       if (file.size > 5 * 1024 * 1024) {
-        setError("Image size must be less than 5MB");
+        setError('Image file size must be under 5MB');
         return;
       }
 
@@ -33,19 +30,28 @@ const CreatePost = () => {
         setImagePreview(reader.result);
       };
       reader.readAsDataURL(file);
-      setError(''); // Clear any previous errors
+      setError('');
     }
+  };
+
+  const removeSelectedImage = () => {
+    setSelectedImage(null);
+    setImagePreview('');
+    const input = document.getElementById('post-image-input');
+    if (input) input.value = '';
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!title.trim() || !content.trim()) return;
+
     setIsLoading(true);
     setError('');
-    
+
     try {
       const formData = new FormData();
-      formData.append('title', title);
-      formData.append('content', content);
+      formData.append('title', title.trim());
+      formData.append('content', content.trim());
       if (selectedImage) {
         formData.append('image', selectedImage);
       }
@@ -53,147 +59,195 @@ const CreatePost = () => {
       const response = await fetch(`${API_BASE_URL}/createPost`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          Authorization: `Bearer ${localStorage.getItem('token')}`
         },
         body: formData
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create post');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to create post');
       }
 
-      const data = await response.json();
-      alert('Your post has been created successfully!');
+      // Invalidate posts cache so feed loads fresh
+      sessionStorage.removeItem('home_posts_cache');
       navigate('/home');
-    } catch (error) {
-      console.error('Error creating post:', error);
-      setError('Failed to create post. Please try again.');
+    } catch (err) {
+      console.error('Create post error:', err);
+      setError(err.message || 'Failed to publish post. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCancel = () => {
-    navigate(-1);
-  };
-
   return (
-    <div className="h-full" style={{
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-    }}>
-      <div className="container py-5">
-        <div className="row justify-content-center">
-          <div className="col-md-8">
-              <Card className="shadow-lg">
-                <Card.Header className="text-white align-items-center d-flex justify-content-between py-4" style={{
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-                }}>
-                  <h2 className="mb-0">Create New Post</h2>
-                  <Button variant="light" onClick={handleCancel}>❌</Button>
-                </Card.Header>
-                <Card.Body className="p-4">
-                  <Form onSubmit={handleSubmit}>
-                    {error && <Alert variant="danger">{error}</Alert>}
-                    
-                    {/* Title Input */}
-                    <Form.Group className="mb-4">
-                      <Form.Label className="fw-bold">
-                        Post Title
-                      </Form.Label>
-                      <Form.Control
-                        type="text"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Enter post title..."
-                        required
-                      />
-                    </Form.Group>
-
-                    {/* Content Input */}
-                    <Form.Group className="mb-4">
-                      <Form.Label className="fw-bold">
-                        What's on your mind?
-                      </Form.Label>
-                      <Form.Control
-                        as="textarea"
-                        rows={4}
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                        placeholder="Share your thoughts..."
-                        required
-                      />
-                    </Form.Group>
-
-                  {/* Image Upload */}
-                    <Form.Group className="mb-4">
-                      <Form.Label className="fw-bold">
-                        Add Photo (Optional)
-                      </Form.Label>
-                      <div className="d-flex flex-column align-items-center">
-                        {imagePreview && (
-                          <div className="mb-3 w-100 position-relative">
-                            <img
-                              src={imagePreview}
-                              alt="Preview"
-                              className="img-fluid rounded"
-                              style={{ maxHeight: '400px', width: '100%', objectFit: 'cover' }}
-                            />
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              className="position-absolute top-0 end-0 m-2"
-                              onClick={() => {
-                                setSelectedImage(null);
-                                setImagePreview('');
-                                document.getElementById('image').value = '';
-                              }}
-                              style={{ borderRadius: "50%" }}
-                            >
-                              ✕
-                            </Button>
-                          </div>
-                        )}
-                        <input
-                          type="file"
-                          id="image"
-                          accept="image/*"
-                          onChange={handleImageChange}
-                          className="form-control"
-                          style={{ borderRadius: "10px" }}
-                        />
-                        {selectedImage && (
-                          <small className="text-success mt-2">
-                            ✓ Image selected: {selectedImage.name} ({(selectedImage.size / 1024 / 1024).toFixed(2)} MB)
-                          </small>
-                        )}
-                      </div>
-                    </Form.Group>               
-                  {/* Action Buttons */}
-                  <div className="d-flex gap-3 justify-content-end">
-                    <Button
-                      variant="outline-secondary"
-                      onClick={handleCancel}
-                      type="button"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={isLoading || !title.trim() || !content.trim()}
-                      style={{
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        border: 'none'
-                      }}
-                    >
-                      {isLoading ? 'Posting...' : 'Create Post'}
-                    </Button>
-                  </div>
-                </Form>
-              </Card.Body>
-            </Card>
+    <div className="app-container">
+      {/* Minimalist Header */}
+      <header className="navbar-minimal">
+        <Container className="d-flex align-items-center justify-content-between">
+          <div
+            className="brand-title cursor-pointer"
+            onClick={() => navigate('/home')}
+          >
+            <span className="brand-dot"></span>
+            <span>FeedGram</span>
           </div>
-        </div>
-      </div>
+
+          <button
+            className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+            onClick={() => navigate(-1)}
+          >
+            Cancel
+          </button>
+        </Container>
+      </header>
+
+      {/* Main Content */}
+      <main className="container py-4" style={{ maxWidth: '640px' }}>
+        <Card className="minimal-card p-4">
+          <div className="mb-4">
+            <h1
+              style={{
+                fontSize: '1.25rem',
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.02em',
+                marginBottom: '0.25rem'
+              }}
+            >
+              New Post
+            </h1>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>
+              Share your thoughts, experiences, or photography
+            </p>
+          </div>
+
+          {error && (
+            <Alert variant="danger" dismissible onClose={() => setError('')}>
+              {error}
+            </Alert>
+          )}
+
+          <Form onSubmit={handleSubmit}>
+            <Form.Group className="mb-3">
+              <Form.Label>Title</Form.Label>
+              <Form.Control
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Give your post a concise title..."
+                required
+                maxLength={120}
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Content</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={5}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="What would you like to share today?"
+                required
+              />
+            </Form.Group>
+
+            {/* Media Upload */}
+            <Form.Group className="mb-4">
+              <Form.Label>Photo Attachment (Optional)</Form.Label>
+              {imagePreview ? (
+                <div
+                  style={{
+                    position: 'relative',
+                    borderRadius: 'var(--radius-md)',
+                    overflow: 'hidden',
+                    border: '1px solid var(--border-subtle)',
+                    backgroundColor: 'var(--bg-subtle)'
+                  }}
+                >
+                  <img
+                    src={imagePreview}
+                    alt="Upload preview"
+                    style={{
+                      width: '100%',
+                      maxHeight: '340px',
+                      objectFit: 'cover',
+                      display: 'block'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={removeSelectedImage}
+                    className="btn-icon-minimal position-absolute top-0 end-0 m-2"
+                    style={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                      color: '#ffffff'
+                    }}
+                    title="Remove image"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    border: '1px dashed var(--border-medium)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '1.5rem',
+                    textAlign: 'center',
+                    backgroundColor: 'var(--bg-subtle)',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => document.getElementById('post-image-input').click()}
+                >
+                  <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>📷</div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>
+                    Click to browse and upload an image
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    PNG, JPG, or WEBP up to 5MB
+                  </div>
+                </div>
+              )}
+
+              <input
+                id="post-image-input"
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                style={{ display: 'none' }}
+              />
+            </Form.Group>
+
+            {/* Submit Actions */}
+            <div className="d-flex justify-content-end gap-2 pt-2">
+              <button
+                type="button"
+                className="btn-minimal btn-minimal-secondary"
+                onClick={() => navigate(-1)}
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn-minimal btn-minimal-primary"
+                disabled={isLoading || !title.trim() || !content.trim()}
+              >
+                {isLoading ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Publishing...
+                  </>
+                ) : (
+                  'Publish Post'
+                )}
+              </button>
+            </div>
+          </Form>
+        </Card>
+      </main>
     </div>
   );
 };

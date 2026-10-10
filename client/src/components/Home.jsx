@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Container, Card, Button, Row, Col, Image, Form } from "react-bootstrap";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Container, Card, Image, Form, Spinner } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import FeedPost from "./FeedPost";
 import { API_BASE_URL } from "../config/api";
@@ -18,40 +18,33 @@ const Home = () => {
       return null;
     }
   });
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchTimeout, setSearchTimeout] = useState(null);
+  const searchTimeoutRef = useRef(null);
 
-  // Helper function to get current user ID from token
-  const getCurrentUserId = () => {
-    const token = localStorage.getItem('token');
+  // Helper to extract current user ID from JWT
+  const getCurrentUserId = useCallback(() => {
+    const token = localStorage.getItem("token");
     if (token) {
       try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
+        const payload = JSON.parse(atob(token.split(".")[1]));
         return payload.userId;
       } catch (error) {
         return null;
       }
     }
     return null;
-  };
+  }, []);
 
-  const getCachedPosts = () => {
-    try {
-      const cachedPosts = sessionStorage.getItem(POSTS_CACHE_KEY);
-      return cachedPosts ? JSON.parse(cachedPosts) : null;
-    } catch (error) {
-      return null;
-    }
-  };
+  const currentUserId = getCurrentUserId();
 
   const cachePosts = (nextPosts) => {
     try {
       sessionStorage.setItem(POSTS_CACHE_KEY, JSON.stringify(nextPosts));
     } catch (error) {
-      console.log(error);
+      console.error("Cache posts error:", error);
     }
   };
 
@@ -61,44 +54,46 @@ const Home = () => {
         sessionStorage.setItem(USER_CACHE_KEY, JSON.stringify(nextUser));
       }
     } catch (error) {
-      console.log(error);
+      console.error("Cache user error:", error);
     }
   };
 
   // Fetch posts from backend
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/home`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
       });
+      if (!response.ok) return;
       const data = await response.json();
       const nextPosts = data.posts || data;
-      setPosts(nextPosts); // Handle both paginated and simple response
+      setPosts(nextPosts);
       cachePosts(nextPosts);
     } catch (err) {
-      console.log(err);
+      console.error("Error fetching posts:", err);
     }
-  };
+  }, []);
 
   // Fetch current user data
-  const fetchCurrentUser = async () => {
+  const fetchCurrentUser = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/profile`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
       });
+      if (!response.ok) return;
       const data = await response.json();
       setCurrentUser(data.user);
       cacheCurrentUser(data.user);
     } catch (err) {
-      console.log(err);
+      console.error("Error fetching current user:", err);
     }
-  };
+  }, []);
 
-  // Search for users by username
+  // Debounced search for users
   const searchUsers = async (query) => {
     if (!query.trim()) {
       setSearchResults([]);
@@ -108,127 +103,110 @@ const Home = () => {
 
     try {
       setSearchLoading(true);
-      const response = await fetch(`${API_BASE_URL}/search/users?q=${encodeURIComponent(query)}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+      const response = await fetch(
+        `${API_BASE_URL}/search/users?q=${encodeURIComponent(query)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
         }
-      });
-      const data = await response.json();
-      setSearchResults(data.users || []);
-      setShowSearchResults(true);
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.users || []);
+        setShowSearchResults(true);
+      }
     } catch (err) {
-      console.error('Search error:', err);
+      console.error("Search error:", err);
       setSearchResults([]);
     } finally {
       setSearchLoading(false);
     }
   };
 
-  // Handle search input change
   const handleSearchChange = (e) => {
     const query = e.target.value;
     setSearchQuery(query);
-    
-    // Clear existing timeout
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
     }
-    
-    // Set new timeout for debouncing
-    const newTimeout = setTimeout(() => {
+
+    searchTimeoutRef.current = setTimeout(() => {
       searchUsers(query);
-    }, 300);
-    
-    setSearchTimeout(newTimeout);
+    }, 250);
   };
 
-  // Handle clicking on a search result
   const handleSearchResultClick = (userId) => {
     navigate(`/user/${userId}`);
-    setSearchQuery('');
+    setSearchQuery("");
     setShowSearchResults(false);
   };
 
-  // Generate avatar from username if no avatar available
+  // Generate avatar from username
   const getCurrentUserAvatar = () => {
     if (currentUser?.avatar) {
       return currentUser.avatar;
     }
-    const username = currentUser?.username || 'User';
-    return `https:/.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
+    const username = currentUser?.username || "User";
+    return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
   };
 
-  // Handle like/unlike functionality
+  // Optimistic like handler with proper rollback
   const handleLike = async (postId) => {
-    const currentUserId = getCurrentUserId();
-    if (!currentUserId) {
-      console.error('User not authenticated');
+    const userId = currentUserId;
+    if (!userId) {
+      navigate("/login");
       return;
     }
 
-    // Find the current post
-    const currentPost = posts.find(post => post._id === postId);
+    const currentPost = posts.find((p) => p._id === postId);
     if (!currentPost) return;
 
-    const isLiked = currentPost.likes && currentPost.likes.includes(currentUserId);
-    
-    // Optimistic update - update UI immediately
-    setPosts(prevPosts => 
-      prevPosts.map(post => {
+    const isLiked = currentPost.likes && currentPost.likes.includes(userId);
+
+    // Optimistic state update
+    setPosts((prevPosts) =>
+      prevPosts.map((post) => {
         if (post._id === postId) {
-          if (isLiked) {
-            // Unlike
-            return {
-              ...post,
-              likes: post.likes.filter(id => id !== currentUserId)
-            };
-          } else {
-            // Like
-            return {
-              ...post,
-              likes: [...post.likes, currentUserId]
-            };
-          }
+          const postLikes = Array.isArray(post.likes) ? post.likes : [];
+          return {
+            ...post,
+            likes: isLiked
+              ? postLikes.filter((id) => id !== userId)
+              : [...postLikes, userId],
+          };
         }
         return post;
       })
     );
 
     try {
-      // Make API call
       const endpoint = isLiked ? `unlike/${postId}` : `like/${postId}`;
       const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "Content-Type": "application/json",
+        },
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update like');
+        throw new Error("Failed to update like status");
       }
-
     } catch (error) {
-      console.error('Like/Unlike error:', error);
-      
-      // Revert optimistic update on error
-      setPosts(prevPosts => 
-        prevPosts.map(post => {
+      console.error("Like/Unlike error:", error);
+      // Revert optimistic update accurately
+      setPosts((prevPosts) =>
+        prevPosts.map((post) => {
           if (post._id === postId) {
-            if (isLiked) {
-              // Revert unlike
-              return {
-                ...post,
-                likes: [...post.likes, currentUserId]
-              };
-            } else {
-              // Revert like
-              return {
-                ...post,
-                likes: post.likes.indexOf(id => id !== currentUserId)
-              };
-            }
+            const postLikes = Array.isArray(post.likes) ? post.likes : [];
+            return {
+              ...post,
+              likes: isLiked
+                ? [...postLikes, userId]
+                : postLikes.filter((id) => id !== userId),
+            };
           }
           return post;
         })
@@ -236,296 +214,254 @@ const Home = () => {
     }
   };
 
-  // Handle delete post functionality
+  // Immediate UI update on delete
   const handleDeletePost = (postId) => {
-    // Remove post from UI immediately
-    setPosts(prevPosts => {
-      const nextPosts = prevPosts.filter(post => post._id !== postId);
+    setPosts((prevPosts) => {
+      const nextPosts = prevPosts.filter((post) => post._id !== postId);
       cachePosts(nextPosts);
       return nextPosts;
     });
   };
 
   useEffect(() => {
-    const cachedPosts = getCachedPosts();
-
-    if (cachedPosts) {
-      setPosts(cachedPosts);
-    } else {
+    try {
+      const cached = sessionStorage.getItem(POSTS_CACHE_KEY);
+      if (cached) {
+        setPosts(JSON.parse(cached));
+      } else {
+        fetchPosts();
+      }
+    } catch {
       fetchPosts();
     }
 
     if (!currentUser) {
       fetchCurrentUser();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Close search results when clicking outside
+  // Close search results dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (!event.target.closest('.search-container')) {
+      if (!event.target.closest(".search-wrapper")) {
         setShowSearchResults(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
     };
   }, []);
 
-  const handleProfileClick = () => {
-    if(!localStorage.getItem("token")) {
-      navigate("/login");
-      return;
-    }
-    navigate("/profile");
-  };
-
   const handleLogout = () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login");
-      return;
-    }
     localStorage.removeItem("token");
+    localStorage.removeItem("tokenExpiration");
     sessionStorage.removeItem(POSTS_CACHE_KEY);
     sessionStorage.removeItem(USER_CACHE_KEY);
     navigate("/login");
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f0f2f5" }}>
-      <style>
-        {`
-          .search-container input::placeholder {
-            color: rgba(255, 255, 255, 0.7) !important;
-          }
-          .search-result-item:hover {
-            background-color: #f8f9fa !important;
-          }
-        `}
-      </style>
-      {/* Header */}
-      <div style={{ 
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        padding: "15px 0",
-        marginBottom: "30px",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.1)"
-      }}>
-        <Container>
-          <div className="d-flex justify-content-between align-items-center">
-            <h2 className="text-white mb-0 fw-bold d-flex align-items-center">
-              <span style={{ fontSize: "30px", marginRight: "10px" }}>🌟</span>
-              FeedGram
-            </h2>
-            
-            {/* Search Bar */}
-            <div className="position-relative mx-3 search-container" style={{ flex: 1, maxWidth: "400px" }}>
-              <Form.Control
-                type="text"
-                placeholder="Search for users..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                style={{
-                  borderRadius: "25px",
-                  padding: "8px 20px",
-                  border: "2px solid rgba(255,255,255,0.3)",
-                  backgroundColor: "rgba(255,255,255,0.1)",
-                  color: "white",
-                  fontSize: "14px"
-                }}
-                className="text-white"
-                onFocus={(e) => e.target.style.backgroundColor = "rgba(255,255,255,0.2)"}
-                onBlur={(e) => e.target.style.backgroundColor = "rgba(255,255,255,0.1)"}
-              />
-              <div 
-                style={{
-                  position: "absolute",
-                  right: "15px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "rgba(255,255,255,0.7)"
-                }}
-              >
-                🔍
-              </div>
-              
-              {/* Search Results Dropdown */}
-              {showSearchResults && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "100%",
-                    left: 0,
-                    right: 0,
-                    backgroundColor: "white",
-                    borderRadius: "10px",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                    zIndex: 1000,
-                    maxHeight: "300px",
-                    overflowY: "auto",
-                    marginTop: "5px"
-                  }}
-                >
-                  {searchLoading ? (
-                    <div className="text-center p-3">
-                      <div className="spinner-border spinner-border-sm" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                      </div>
-                    </div>
-                  ) : searchResults.length > 0 ? (
-                    searchResults.map((user) => (
-                      <div
-                        key={user._id}
-                        onClick={() => handleSearchResultClick(user._id)}
-                        className="search-result-item"
+    <div className="app-container">
+      {/* Minimalist Top Navigation */}
+      <header className="navbar-minimal">
+        <Container className="d-flex align-items-center justify-content-between">
+          {/* Brand */}
+          <div
+            className="brand-title cursor-pointer"
+            onClick={() => navigate("/home")}
+          >
+            <span className="brand-dot"></span>
+            <span>FeedGram</span>
+          </div>
+
+          {/* Search Bar */}
+          <div className="search-wrapper mx-3">
+            <span className="search-icon-minimal">🔍</span>
+            <input
+              type="text"
+              placeholder="Search users..."
+              value={searchQuery}
+              onChange={handleSearchChange}
+              className="search-input-minimal"
+            />
+
+            {/* Search Dropdown */}
+            {showSearchResults && (
+              <div className="search-dropdown-minimal">
+                {searchLoading ? (
+                  <div className="text-center py-3">
+                    <Spinner animation="border" size="sm" variant="dark" />
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  searchResults.map((user) => (
+                    <div
+                      key={user._id}
+                      onClick={() => handleSearchResultClick(user._id)}
+                      className="search-item-minimal"
+                    >
+                      <Image
+                        src={
+                          user.avatar ||
+                          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+                            user.username
+                          )}`
+                        }
+                        roundedCircle
                         style={{
-                          padding: "10px 15px",
-                          borderBottom: "1px solid #f0f0f0",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          transition: "background-color 0.2s"
+                          width: "32px",
+                          height: "32px",
+                          objectFit: "cover",
+                          marginRight: "10px",
+                          border: "1px solid var(--border-subtle)",
                         }}
-                      >
-                        <Image
-                          src={user.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(user.username)}`}
-                          roundedCircle
-                          style={{ width: "35px", height: "35px", marginRight: "10px", objectFit: "cover" }}
-                        />
-                        <div>
-                          <div style={{ fontWeight: "600", color: "#333" }}>{user.username}</div>
-                          {user.isPrivate && (
-                            <small style={{ color: "#666" }}>🔒 Private Account</small>
-                          )}
+                      />
+                      <div className="flex-grow-1">
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            fontSize: "0.875rem",
+                            color: "var(--text-primary)",
+                          }}
+                        >
+                          {user.username}
                         </div>
+                        {user.isPrivate && (
+                          <span
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "var(--text-muted)",
+                            }}
+                          >
+                            🔒 Private
+                          </span>
+                        )}
                       </div>
-                    ))
-                  ) : searchQuery.trim() && (
-                    <div className="text-center p-3 text-muted">
-                      No users found for "{searchQuery}"
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-            
-            <div className="d-flex align-items-center">
+                  ))
+                ) : (
+                  searchQuery.trim() && (
+                    <div
+                      className="text-center py-3"
+                      style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}
+                    >
+                      No users found
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* User Nav Actions */}
+          <div className="d-flex align-items-center gap-2">
+            <button
+              className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+              onClick={() => navigate("/chat")}
+              title="Messages"
+            >
+              <span>💬</span>
+              <span className="d-none d-sm-inline">Chat</span>
+            </button>
+
+            <button
+              className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+              onClick={() => navigate("/profile")}
+              title="Profile"
+            >
               <Image
                 src={getCurrentUserAvatar()}
                 roundedCircle
-                onClick={handleProfileClick}
-                style={{ 
-                  width: "40px", 
-                  height: "40px",
-                  marginRight: "15px",
-                  cursor: "pointer",
-                  border: "2px solid white",
-                  objectFit: "cover"
+                style={{
+                  width: "22px",
+                  height: "22px",
+                  objectFit: "cover",
                 }}
-                alt="User Avatar"
+                alt="Profile"
               />
-              <Button 
-                variant="outline-light"
-                onClick={() => navigate('/chat')}
-                style={{ borderRadius: "20px",
-                  background:"linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-                  marginRight: "15px"
-                }}
-              >
-                Chat �
-              </Button>
+              <span className="d-none d-sm-inline">Profile</span>
+            </button>
 
-              <Button 
-                variant="outline-light"
-                onClick={handleLogout}
-                style={{ borderRadius: "20px",
-                  background:"linear-gradient(135deg, #f093fb 0%, #f5576c 100%)"
-                }}
-              >
-                Logout
-              </Button>
-            </div>
+            <button
+              className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+              onClick={handleLogout}
+              title="Logout"
+            >
+              Logout
+            </button>
           </div>
         </Container>
-      </div>
+      </header>
 
-      <Container>
-        <Row className="justify-content-center">
-          <Col lg={7}>
-            {/* Create Post Card */}
-            <Card className="mb-4 shadow-sm border-0" style={{ borderRadius: "15px" }}>
-              <Card.Body className="p-4">
-                <div className="d-flex align-items-center">
-                  <Image
-                    src={getCurrentUserAvatar()}
-                    roundedCircle
-                    style={{ 
-                      width: "50px", 
-                      height: "50px", 
-                      marginRight: "15px",
-                      border: "3px solid #667eea",
-                      objectFit: "cover"
-                    }}
-                    alt="User Avatar"
-                  />
-                  <Form.Control
-                    type="text"
-                    placeholder="What's on your mind?"
-                    disabled
-                    style={{ 
-                      borderRadius: "25px",
-                      padding: "10px 20px",
-                      backgroundColor: "#f0f2f5",
-                      border: "1px solid #ddd",
-                      color: "#65676b"
-                    }}
-                  />
-                  <Button
-                    style={{ 
-                      marginLeft: "10px",
-                      borderRadius: "10px",
-                      background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-                      border: "none",
-                      padding: "10px 20px"
-                    }}
-                    onClick={() => navigate('/createPost')}
-                  >
-                    Create New Post
-                  </Button>
-                </div>
-              </Card.Body>
-            </Card>
+      {/* Main Content Feed */}
+      <main className="feed-container">
+        {/* Quick Post Prompt */}
+        <div className="create-post-trigger">
+          <Image
+            src={getCurrentUserAvatar()}
+            roundedCircle
+            style={{
+              width: "42px",
+              height: "42px",
+              objectFit: "cover",
+              border: "1px solid var(--border-subtle)",
+              cursor: "pointer",
+            }}
+            onClick={() => navigate("/profile")}
+            alt="You"
+          />
+          <div
+            className="create-post-fake-input"
+            onClick={() => navigate("/createPost")}
+          >
+            Share an update or photo...
+          </div>
+          <button
+            className="btn-minimal btn-minimal-primary btn-minimal-sm"
+            onClick={() => navigate("/createPost")}
+          >
+            + Post
+          </button>
+        </div>
 
-            {/* Posts Feed */}
-            {posts.length > 0 && posts.map((post) => (
-              <FeedPost 
-                key={post._id} 
-                post={post} 
-                onLike={handleLike}
-                onDelete={handleDeletePost}
-              />
-            ))}
-
-            {/* Load More */}
-            <div className="text-center mb-5">
-              <Button
-                size="lg"
-                style={{ 
-                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  border: "none",
-                  borderRadius: "25px",
-                  padding: "12px 40px",
-                  fontWeight: "600"
+        {/* Post Feed */}
+        {posts.length > 0 ? (
+          posts.map((post) => (
+            <FeedPost
+              key={post._id}
+              post={post}
+              currentUserId={currentUserId}
+              onLike={handleLike}
+              onDelete={handleDeletePost}
+            />
+          ))
+        ) : (
+          <Card className="text-center py-5 border-0 bg-transparent">
+            <Card.Body>
+              <p
+                style={{
+                  color: "var(--text-muted)",
+                  fontSize: "0.95rem",
+                  marginBottom: "1rem",
                 }}
               >
-                Load More Posts
-              </Button>
-            </div>
-          </Col>
-        </Row>
-      </Container>
+                No posts to display in your feed yet.
+              </p>
+              <button
+                className="btn-minimal btn-minimal-primary"
+                onClick={() => navigate("/createPost")}
+              >
+                Create the First Post
+              </button>
+            </Card.Body>
+          </Card>
+        )}
+      </main>
     </div>
   );
 };

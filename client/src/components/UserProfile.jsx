@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Image, Button, Nav, Badge, Alert } from 'react-bootstrap';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Container, Row, Col, Image, Nav, Alert, Spinner } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Post from './Post';
@@ -10,7 +10,7 @@ const UserProfile = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState({});
   const [posts, setPosts] = useState([]);
-  const [activeTab, setActiveTab] = useState("posts");
+  const [activeTab, setActiveTab] = useState('posts');
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -19,92 +19,32 @@ const UserProfile = () => {
   const [error, setError] = useState('');
   const [notification, setNotification] = useState('');
   const [showNotification, setShowNotification] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
-  // Helper function to get current user ID from token
-  const getCurrentUserId = () => {
+  const getCurrentUserId = useCallback(() => {
     const token = localStorage.getItem('token');
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         return payload.userId;
-      } catch (error) {
+      } catch {
         return null;
       }
     }
     return null;
-  };
+  }, []);
 
   const currentUserId = getCurrentUserId();
 
-  useEffect(() => {
-    if (userId) {
-      // Check if user is trying to view their own profile
-      if (userId === currentUserId) {
-        navigate('/profile');
-        return;
-      }
-      
-      setError(''); // Clear previous errors
-      setLoading(true); // Show loading state
-      fetchUserProfile();
-    }
-  }, [userId, currentUserId, navigate]);
-
-  // Fetch data when active tab changes
-  useEffect(() => {
-    if (user._id && (activeTab === "followers" || activeTab === "following")) {
-      // Only fetch if we can view the profile (not private, or private but we're following)
-      if (!user.isPrivate || isFollowing) {
-        fetchFollowersAndFollowing();
-      }
-    }
-  }, [activeTab, user._id, user.isPrivate, isFollowing]);
-
-  const fetchUserProfile = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      
-      console.log('Fetching user profile for userId:', userId);
-      console.log('Token available:', !!token);
-      
-      // Fetch user profile
-      const profileResponse = await axios.get(`${API_BASE_URL}/user-profile/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      console.log('Profile response:', profileResponse.data);
-      
-      setUser(profileResponse.data.user);
-      
-      // Check if user is private and we're not following
-      if (!profileResponse.data.user.isPrivate || profileResponse.data.canViewPosts) {
-        setPosts(profileResponse.data.posts || []);
-      }
-      
-      // Set follow status
-      setIsFollowing(profileResponse.data.isFollowing || false);
-      setFollowRequestSent(profileResponse.data.followRequestSent || false);
-      
-      // Fetch followers and following if we can view the profile
-      // This includes: own profile, public profiles, or private profiles we're following
-      if (!profileResponse.data.user.isPrivate || profileResponse.data.canViewPosts || profileResponse.data.isFollowing) {
-        await fetchFollowersAndFollowing();
-      }
-      
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      console.error('Error response:', error.response?.data);
-      setError('Error loading user profile: ' + (error.response?.data?.message || error.message));
-    } finally {
-      setLoading(false);
-    }
+  const showToast = (msg) => {
+    setNotification(msg);
+    setShowNotification(true);
+    setTimeout(() => setShowNotification(false), 3000);
   };
 
-  const fetchFollowersAndFollowing = async () => {
+  const fetchFollowersAndFollowing = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      
       const [followersRes, followingRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/follow/followers/${userId}`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -113,173 +53,147 @@ const UserProfile = () => {
           headers: { Authorization: `Bearer ${token}` }
         })
       ]);
-      
+
       setFollowers(followersRes.data.followers || []);
       setFollowing(followingRes.data.following || []);
-    } catch (error) {
-      console.error('Error fetching followers/following:', error);
-      if (error.response?.status === 403) {
-        console.log('Private account - cannot view followers/following');
+    } catch (err) {
+      if (err.response?.status === 403) {
         setFollowers([]);
         setFollowing([]);
       }
     }
-  };
+  }, [userId]);
 
-  const handleFollow = async () => {
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+
+      const profileResponse = await axios.get(`${API_BASE_URL}/user-profile/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const userData = profileResponse.data.user || {};
+      setUser(userData);
+
+      if (!userData.isPrivate || profileResponse.data.canViewPosts) {
+        setPosts(profileResponse.data.posts || []);
+      }
+
+      setIsFollowing(!!profileResponse.data.isFollowing);
+      setFollowRequestSent(!!profileResponse.data.followRequestSent);
+
+      if (!userData.isPrivate || profileResponse.data.canViewPosts || profileResponse.data.isFollowing) {
+        await fetchFollowersAndFollowing();
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Error loading profile');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, fetchFollowersAndFollowing]);
+
+  useEffect(() => {
+    if (!userId) return;
+    if (userId === currentUserId) {
+      navigate('/profile');
+      return;
+    }
+    setError('');
+    fetchUserProfile();
+  }, [userId, currentUserId, navigate, fetchUserProfile]);
+
+  useEffect(() => {
+    if (user._id && (activeTab === 'followers' || activeTab === 'following')) {
+      if (!user.isPrivate || isFollowing) {
+        fetchFollowersAndFollowing();
+      }
+    }
+  }, [activeTab, user._id, user.isPrivate, isFollowing, fetchFollowersAndFollowing]);
+
+  const handleFollowToggle = async () => {
+    if (followLoading) return;
+    setFollowLoading(true);
+
     try {
       const token = localStorage.getItem('token');
-      
       if (isFollowing) {
         // Unfollow
         await axios.delete(`${API_BASE_URL}/follow/unfollow/${userId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setIsFollowing(false);
-        setUser(prev => ({
+        setUser((prev) => ({
           ...prev,
-          followersCount: (prev.followersCount || 0) - 1
+          followersCount: Math.max(0, (prev.followersCount || 0) - 1)
         }));
-        // Show notification
-        setNotification('Successfully unfollowed user');
-        setShowNotification(true);
-        setTimeout(() => setShowNotification(false), 3000);
-        // Refresh followers list
+        showToast('Unfollowed user');
         await fetchFollowersAndFollowing();
       } else {
         // Follow
-        const response = await axios.post(`${API_BASE_URL}/follow/follow/${userId}`, {}, {
+        await axios.post(`${API_BASE_URL}/follow/follow/${userId}`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        
+
         if (user.isPrivate) {
           setFollowRequestSent(true);
-          setNotification('Follow request sent to private account');
-          setShowNotification(true);
-          setTimeout(() => setShowNotification(false), 3000);
+          showToast('Follow request sent');
         } else {
           setIsFollowing(true);
-          setUser(prev => ({
+          setUser((prev) => ({
             ...prev,
             followersCount: (prev.followersCount || 0) + 1
           }));
-          setNotification('Successfully followed user');
-          setShowNotification(true);
-          setTimeout(() => setShowNotification(false), 3000);
-          // Refresh followers list
+          showToast('Following user');
           await fetchFollowersAndFollowing();
         }
       }
-    } catch (error) {
-      console.error('Error following/unfollowing user:', error);
-      setNotification('Error updating follow status');
-      setShowNotification(true);
-      setTimeout(() => setShowNotification(false), 3000);
+    } catch (err) {
+      console.error('Follow toggle error:', err);
+      showToast('Error updating follow status');
+    } finally {
+      setFollowLoading(false);
     }
-  };
-
-  const renderFollowButton = () => {
-    if (currentUserId === userId) {
-      return null; // Don't show follow button for own profile
-    }
-
-    if (isFollowing) {
-      return (
-        <Button
-          variant="outline-danger"
-          size="sm"
-          onClick={handleFollow}
-          style={{ borderRadius: "20px", padding: "8px 20px" }}
-        >
-          Unfollow
-        </Button>
-      );
-    } else if (followRequestSent) {
-      return (
-        <Button
-          variant="outline-secondary"
-          size="sm"
-          disabled
-          style={{ borderRadius: "20px", padding: "8px 20px" }}
-        >
-          Request Sent
-        </Button>
-      );
-    } else {
-      return (
-        <Button
-          style={{
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            border: "none",
-            borderRadius: "20px",
-            padding: "8px 20px"
-          }}
-          size="sm"
-          onClick={handleFollow}
-        >
-          Follow
-        </Button>
-      );
-    }
-  };
-
-  const handleMessage = () => {
-    navigate(`/chat?userId=${userId}`);
-  };
-
-  const renderActionButtons = () => {
-    return (
-      <div className="d-flex gap-2">
-        {renderFollowButton()}
-        <Button
-          variant="outline-primary"
-          size="sm"
-          onClick={handleMessage}
-          style={{ borderRadius: "20px", padding: "8px 20px" }}
-        >
-          Message
-        </Button>
-      </div>
-    );
   };
 
   if (loading) {
     return (
-      <Container className="py-5">
-        <div className="text-center">
-          <div className="spinner-border" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-        </div>
-      </Container>
+      <div className="app-container d-flex align-items-center justify-content-center">
+        <Spinner animation="border" variant="dark" />
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Container className="py-5">
-        <div className="text-center">
-          <p className="text-danger">{error}</p>
-          <Button onClick={() => navigate(-1)}>Go Back</Button>
-        </div>
-      </Container>
+      <div className="app-container d-flex flex-column align-items-center justify-content-center">
+        <p className="text-danger mb-3">{error}</p>
+        <button
+          className="btn-minimal btn-minimal-primary"
+          onClick={() => navigate('/home')}
+        >
+          Return to Feed
+        </button>
+      </div>
     );
   }
 
   const canViewContent = !user.isPrivate || isFollowing;
 
   return (
-    <Container className="py-5">
-      {/* Notification Alert */}
+    <div className="app-container">
+      {/* Toast Notification */}
       {showNotification && (
-        <Alert 
-          variant={notification.includes('Successfully') || notification.includes('sent') ? 'success' : 'danger'}
+        <Alert
+          variant="dark"
           style={{
             position: 'fixed',
-            top: '20px',
-            right: '20px',
+            bottom: '24px',
+            right: '24px',
             zIndex: 9999,
-            minWidth: '300px'
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-dropdown)',
+            fontSize: '0.875rem'
           }}
           dismissible
           onClose={() => setShowNotification(false)}
@@ -288,257 +202,300 @@ const UserProfile = () => {
         </Alert>
       )}
 
-      {/* Back Button */}
-      <Row className="justify-content-center mb-3">
-        <Col md={8}>
-          <Button
-            variant=""
-            onClick={() => navigate(-1)}
-            style={{ 
-                color:"#fff",
-               backgroundColor:"#667eea",
-              borderRadius: "20px",
-              padding: "8px 20px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              width: "fit-content"
-            }}
+      {/* Top Bar */}
+      <header className="navbar-minimal">
+        <Container className="d-flex align-items-center justify-content-between">
+          <div
+            className="brand-title cursor-pointer"
+            onClick={() => navigate('/home')}
           >
-            <span>←</span> Back
-          </Button>
-        </Col>
-      </Row>
-      
-      {/* Profile Header */}
-      <Row className="justify-content-center mb-4">
-        <Col md={8}>
-          <Card className="border-0 shadow-sm" style={{ borderRadius: "20px" }}>
-            <Card.Body className="p-4">
-              <Row className="align-items-center">
-                <Col md={3} className="text-center">
-                  <Image
-                    src={user.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=avatar"}
-                    roundedCircle
-                    style={{ width: "120px", height: "120px", objectFit: "cover" }}
-                    className="border border-3 border-light shadow"
-                  />
-                </Col>
-                <Col md={9}>
-                  <div className="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                      <h3 className="mb-1">{user.username}</h3>
-                      <p className="text-muted mb-0">{user.email}</p>
-                      {user.isPrivate && (
-                        <Badge bg="secondary" className="mt-1">
-                          Private Account
-                        </Badge>
-                      )}
-                    </div>
-                    {renderActionButtons()}
-                  </div>
-                  
-                  {user.bio && (
-                    <p className="mb-3">{user.bio}</p>
-                  )}
-                  
-                  <Row className="text-center">
-                    <Col>
-                      <h5 className="mb-0">{posts.length}</h5>
-                      <small className="text-muted">Posts</small>
-                    </Col>
-                    <Col>
-                      <h5 className="mb-0">{user.followersCount || 0}</h5>
-                      <small className="text-muted">Followers</small>
-                    </Col>
-                    <Col>
-                      <h5 className="mb-0">{user.followingCount || 0}</h5>
-                      <small className="text-muted">Following</small>
-                    </Col>
-                  </Row>
-                </Col>
-              </Row>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
+            <span className="brand-dot"></span>
+            <span>FeedGram</span>
+          </div>
 
-      {/* Navigation Tabs */}
-      {canViewContent && (
-        <Row className="justify-content-center mb-4">
-          <Col md={8}>
-            <Nav variant="pills" className="justify-content-center" style={{ gap: "10px" }}>
+          <div className="d-flex align-items-center gap-2">
+            <button
+              className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+              onClick={() => navigate(-1)}
+            >
+              ← Back
+            </button>
+            <button
+              className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+              onClick={() => navigate('/home')}
+            >
+              Feed
+            </button>
+          </div>
+        </Container>
+      </header>
+
+      {/* Profile Container */}
+      <main className="container py-4" style={{ maxWidth: '860px' }}>
+        <section className="profile-card">
+          <Row className="align-items-center">
+            <Col xs={12} sm={3} className="text-center mb-3 mb-sm-0">
+              <Image
+                src={
+                  user.avatar ||
+                  `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+                    user.username || 'User'
+                  )}`
+                }
+                roundedCircle
+                className="profile-avatar-large"
+                alt={user.username}
+              />
+            </Col>
+
+            <Col xs={12} sm={9}>
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                <div>
+                  <h2
+                    style={{
+                      fontSize: '1.35rem',
+                      fontWeight: 700,
+                      margin: 0,
+                      color: 'var(--text-primary)',
+                      letterSpacing: '-0.02em'
+                    }}
+                  >
+                    {user.username}
+                  </h2>
+                  <p
+                    style={{
+                      fontSize: '0.875rem',
+                      color: 'var(--text-muted)',
+                      margin: 0
+                    }}
+                  >
+                    {user.email}
+                  </p>
+                  {user.isPrivate && (
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        color: 'var(--text-muted)',
+                        backgroundColor: 'var(--bg-subtle)',
+                        padding: '2px 8px',
+                        borderRadius: 'var(--radius-full)',
+                        marginTop: '4px'
+                      }}
+                    >
+                      🔒 Private Account
+                    </span>
+                  )}
+                </div>
+
+                <div className="d-flex align-items-center gap-2">
+                  <button
+                    className={`btn-minimal btn-minimal-sm ${
+                      isFollowing ? 'btn-minimal-secondary' : 'btn-minimal-primary'
+                    }`}
+                    onClick={handleFollowToggle}
+                    disabled={followLoading || followRequestSent}
+                  >
+                    {followLoading ? (
+                      <Spinner animation="border" size="sm" />
+                    ) : isFollowing ? (
+                      'Following'
+                    ) : followRequestSent ? (
+                      'Requested'
+                    ) : (
+                      'Follow'
+                    )}
+                  </button>
+
+                  <button
+                    className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+                    onClick={() => navigate(`/chat?userId=${userId}`)}
+                  >
+                    Message
+                  </button>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div
+                className="d-flex gap-4 py-2"
+                style={{
+                  borderTop: '1px solid var(--border-subtle)',
+                  borderBottom: '1px solid var(--border-subtle)'
+                }}
+              >
+                <div className="profile-stat-box p-0 text-start">
+                  <div className="profile-stat-num">{posts.length}</div>
+                  <div className="profile-stat-label">Posts</div>
+                </div>
+                <div className="profile-stat-box p-0 text-start">
+                  <div className="profile-stat-num">{user.followersCount || 0}</div>
+                  <div className="profile-stat-label">Followers</div>
+                </div>
+                <div className="profile-stat-box p-0 text-start">
+                  <div className="profile-stat-num">{user.followingCount || 0}</div>
+                  <div className="profile-stat-label">Following</div>
+                </div>
+              </div>
+            </Col>
+          </Row>
+        </section>
+
+        {/* Content Tabs */}
+        {canViewContent ? (
+          <>
+            <Nav variant="tabs" className="mb-4">
               <Nav.Item>
                 <Nav.Link
-                  active={activeTab === "posts"}
-                  onClick={() => setActiveTab("posts")}
-                  style={{
-                    borderRadius: "20px",
-                    backgroundColor: activeTab === "posts" ? "" : "transparent",
-                    border: activeTab === "posts" ? "none" : "1px solid #dee2e6",
-                    color: activeTab === "posts" ? "white" : "black"
-                  }}
+                  active={activeTab === 'posts'}
+                  onClick={() => setActiveTab('posts')}
                 >
-                  Posts
+                  Posts ({posts.length})
                 </Nav.Link>
               </Nav.Item>
               <Nav.Item>
                 <Nav.Link
-                  active={activeTab === "followers"}
-                  onClick={() => setActiveTab("followers")}
-                  style={{
-                    borderRadius: "20px",
-                    backgroundColor: activeTab === "followers" ? "#667eea" : "transparent",
-                    border: activeTab === "followers" ? "none" : "1px solid #dee2e6",
-                    color: activeTab === "followers" ? "white" : "black"
-                  }}
+                  active={activeTab === 'followers'}
+                  onClick={() => setActiveTab('followers')}
                 >
-                  Followers
+                  Followers ({user.followersCount || 0})
                 </Nav.Link>
               </Nav.Item>
               <Nav.Item>
                 <Nav.Link
-                  active={activeTab === "following"}
-                  onClick={() => setActiveTab("following")}
-                  style={{
-                    borderRadius: "20px",
-                    backgroundColor: activeTab === "following" ? "#667eea" : "transparent",
-                    border: activeTab === "following" ? "none" : "1px solid #dee2e6",
-                    color: activeTab === "following" ? "white" : "black"
-                  }}
+                  active={activeTab === 'following'}
+                  onClick={() => setActiveTab('following')}
                 >
-                  Following
+                  Following ({user.followingCount || 0})
                 </Nav.Link>
               </Nav.Item>
             </Nav>
-          </Col>
-        </Row>
-      )}
 
-      {/* Content Area */}
-      <Row className="justify-content-center">
-        <Col md={8}>
-          {!canViewContent ? (
-            <div className="text-center my-5">
-              <i className="fas fa-lock fa-3x text-muted mb-3"></i>
-              <h4>This Account is Private</h4>
-              <p className="text-muted">Follow this account to see their posts.</p>
-            </div>
-          ) : (
-            <>
-              {/* Tab Content */}
-              {activeTab === "posts" && (
-                posts.length > 0 ? (
-                  <Row className="g-3 mb-5">
-                    {posts.map((post) => (
-                      <Post key={post._id} post={post} />
-                    ))}
-                  </Row>
+            {activeTab === 'posts' && (
+              posts.length > 0 ? (
+                <Row className="g-3">
+                  {posts.map((post) => (
+                    <Post key={post._id} post={post} />
+                  ))}
+                </Row>
+              ) : (
+                <div className="text-center py-5">
+                  <p style={{ color: 'var(--text-muted)' }}>No posts published yet.</p>
+                </div>
+              )
+            )}
+
+            {activeTab === 'followers' && (
+              <Row className="g-3">
+                {followers.length > 0 ? (
+                  followers.map((f) => (
+                    <Col key={f._id} md={6}>
+                      <div className="minimal-card p-3 d-flex align-items-center justify-content-between mb-0">
+                        <div
+                          className="d-flex align-items-center gap-2 cursor-pointer"
+                          onClick={() => navigate(`/user/${f._id}`)}
+                        >
+                          <Image
+                            src={
+                              f.avatar ||
+                              `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+                                f.username
+                              )}`
+                            }
+                            roundedCircle
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              objectFit: 'cover'
+                            }}
+                          />
+                          <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                            {f.username}
+                          </span>
+                        </div>
+                        <button
+                          className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+                          onClick={() => navigate(`/user/${f._id}`)}
+                        >
+                          View
+                        </button>
+                      </div>
+                    </Col>
+                  ))
                 ) : (
-                  <div className="text-center my-5">
-                    <p className="text-muted">No posts yet.</p>
-                  </div>
-                )
-              )}
+                  <Col xs={12} className="text-center py-5">
+                    <p style={{ color: 'var(--text-muted)' }}>No followers yet</p>
+                  </Col>
+                )}
+              </Row>
+            )}
 
-              {activeTab === "followers" && (
-                <Row className="g-3 mb-5">
-                  {user.isPrivate && !isFollowing ? (
-                    <div className="text-center my-5">
-                      <p className="text-muted">This account is private. Follow to see their followers.</p>
-                    </div>
-                  ) : followers.length > 0 ? (
-                    followers.map((follower) => (
-                      <Col key={follower._id} md={6} lg={4}>
-                        <Card className="h-100 shadow-sm border-0" style={{ borderRadius: "15px" }}>
-                          <Card.Body className="d-flex align-items-center p-3">
-                            <Image
-                              src={follower.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=avatar"}
-                              roundedCircle
-                              style={{ width: "50px", height: "50px", objectFit: "cover", cursor: "pointer" }}
-                              className="me-3"
-                              onClick={() => navigate(`/user/${follower._id}`)}
-                            />
-                            <div className="flex-grow-1">
-                              <h6 
-                                className="mb-0" 
-                                style={{ cursor: "pointer", color: "#667eea" }}
-                                onClick={() => navigate(`/user/${follower._id}`)}
-                              >
-                                {follower.username}
-                              </h6>
-                              <small className="text-muted">Follower</small>
-                            </div>
-                            <Button
-                              variant="outline-primary"
-                              size="sm"
-                              onClick={() => navigate(`/user/${follower._id}`)}
-                            >
-                              View
-                            </Button>
-                          </Card.Body>
-                        </Card>
-                      </Col>
-                    ))
-                  ) : (
-                    <div className="text-center my-5">
-                      <p className="text-muted">No followers yet</p>
-                    </div>
-                  )}
-                </Row>
-              )}
-
-              {activeTab === "following" && (
-                <Row className="g-3 mb-5">
-                  {user.isPrivate && !isFollowing ? (
-                    <div className="text-center my-5">
-                      <p className="text-muted">This account is private. Follow to see who they're following.</p>
-                    </div>
-                  ) : following.length > 0 ? (
-                    following.map((followingUser) => (
-                      <Col key={followingUser._id} md={6} lg={4}>
-                        <Card className="h-100 shadow-sm border-0" style={{ borderRadius: "15px" }}>
-                          <Card.Body className="d-flex align-items-center p-3">
-                            <Image
-                              src={followingUser.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=avatar"}
-                              roundedCircle
-                              style={{ width: "50px", height: "50px", objectFit: "cover", cursor: "pointer" }}
-                              className="me-3"
-                              onClick={() => navigate(`/user/${followingUser._id}`)}
-                            />
-                            <div className="flex-grow-1">
-                              <h6 
-                                className="mb-0" 
-                                style={{ cursor: "pointer", color: "#667eea" }}
-                                onClick={() => navigate(`/user/${followingUser._id}`)}
-                              >
-                                {followingUser.username}
-                              </h6>
-                              <small className="text-muted">Following</small>
-                            </div>
-                            <Button
-                              variant="outline-primary"
-                              size="sm"
-                              onClick={() => navigate(`/user/${followingUser._id}`)}
-                            >
-                              View
-                            </Button>
-                          </Card.Body>
-                        </Card>
-                      </Col>
-                    ))
-                  ) : (
-                    <div className="text-center my-5">
-                      <p className="text-muted">Not following anyone yet</p>
-                    </div>
-                  )}
-                </Row>
-              )}
-            </>
-          )}
-        </Col>
-      </Row>
-    </Container>
+            {activeTab === 'following' && (
+              <Row className="g-3">
+                {following.length > 0 ? (
+                  following.map((u) => (
+                    <Col key={u._id} md={6}>
+                      <div className="minimal-card p-3 d-flex align-items-center justify-content-between mb-0">
+                        <div
+                          className="d-flex align-items-center gap-2 cursor-pointer"
+                          onClick={() => navigate(`/user/${u._id}`)}
+                        >
+                          <Image
+                            src={
+                              u.avatar ||
+                              `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+                                u.username
+                              )}`
+                            }
+                            roundedCircle
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              objectFit: 'cover'
+                            }}
+                          />
+                          <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                            {u.username}
+                          </span>
+                        </div>
+                        <button
+                          className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+                          onClick={() => navigate(`/user/${u._id}`)}
+                        >
+                          View
+                        </button>
+                      </div>
+                    </Col>
+                  ))
+                ) : (
+                  <Col xs={12} className="text-center py-5">
+                    <p style={{ color: 'var(--text-muted)' }}>Not following anyone</p>
+                  </Col>
+                )}
+              </Row>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-5 my-4">
+            <span style={{ fontSize: '2rem' }}>🔒</span>
+            <h4
+              style={{
+                fontSize: '1.1rem',
+                fontWeight: 600,
+                marginTop: '0.75rem',
+                marginBottom: '0.25rem'
+              }}
+            >
+              This account is private
+            </h4>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              Follow this user to view their posts, followers, and following.
+            </p>
+          </div>
+        )}
+      </main>
+    </div>
   );
 };
 

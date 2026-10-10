@@ -33,6 +33,7 @@ function App() {
           <Route path='/' element={isTokenValid() ? <Navigate to="/home" /> : <Navigate to="/login" />} />
           <Route path='/login' element={isTokenValid() ? <Navigate to="/home" /> : <Login />} />
           <Route path='/signup' element={isTokenValid() ? <Navigate to="/home" /> : <Register />} />
+          <Route path='/register' element={<Navigate to="/signup" />} />
           <Route path='/forgot-password' element={<ForgotPassword />} />
           <Route path='/reset-password/:token' element={<ResetPassword />} />
           <Route path="*" element={<Navigate to="/home" />} />

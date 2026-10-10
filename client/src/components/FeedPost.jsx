@@ -1,436 +1,355 @@
-import React, { useState, useEffect } from 'react'
-import {  Card, Button, Image, Alert, Modal } from "react-bootstrap";
+import React, { useState, useEffect, memo } from 'react';
+import { Image, Alert, Modal, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
 
-// Function to format timestamp to "time ago"
+// Memory cache to prevent N+1 duplicate network requests across feed posts
+const followStatusCache = new Map();
+
+// Optimized helper for time formatting
 export const timeAgo = (timestamp) => {
   if (!timestamp) return '';
-  
   const seconds = Math.floor((new Date() - new Date(timestamp)) / 1000);
-  
-  let interval = seconds / 31536000; // years
-  if (interval > 1) return Math.floor(interval) + ' years ago';
-  
-  interval = seconds / 2592000; // months
-  if (interval > 1) return Math.floor(interval) + ' months ago';
-  
-  interval = seconds / 86400; // days
-  if (interval > 1) return Math.floor(interval) + ' days ago';
-  
-  interval = seconds / 3600; // hours
-  if (interval > 1) return Math.floor(interval) + ' hours ago';
-  
-  interval = seconds / 60; // minutes
-  if (interval > 1) return Math.floor(interval) + ' minutes ago';
-  
-  return Math.floor(seconds) + ' seconds ago';
+  if (seconds < 60) return `${Math.max(1, seconds)}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
 };
 
-export default function FeedPost(props) {
+function FeedPost({ post, currentUserId: propCurrentUserId, onLike, onDelete }) {
   const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteNotification, setDeleteNotification] = useState('');
+  const [notification, setNotification] = useState('');
   const [showNotification, setShowNotification] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followRequestSent, setFollowRequestSent] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const getCurrentUserId = () => {
-    // You can decode the JWT token or store userId separately
+  const getEffectiveUserId = () => {
+    if (propCurrentUserId) return propCurrentUserId;
     const token = localStorage.getItem('token');
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         return payload.userId;
-      } catch (error) {
+      } catch {
         return null;
       }
     }
     return null;
   };
 
-  const handleMessage = (userId) => {
-    navigate(`/chat?userId=${userId}`);
-  };
+  const currentUserId = getEffectiveUserId();
+  const postUserId = post.user?._id || post.user;
+  const isPostOwner = currentUserId && (postUserId === currentUserId);
+  const isLiked = Array.isArray(post.likes) && post.likes.includes(currentUserId);
 
-  const currentUserId = getCurrentUserId();
-  const isLiked = props.post.likes && props.post.likes.includes(currentUserId);
-
-  // Check follow status when component mounts
+  // Check follow status with in-memory caching to eliminate N+1 fetches
   useEffect(() => {
+    if (!postUserId || isPostOwner) return;
+
+    if (followStatusCache.has(postUserId)) {
+      const cached = followStatusCache.get(postUserId);
+      setIsFollowing(cached.isFollowing);
+      setFollowRequestSent(cached.followRequestSent);
+      return;
+    }
+
+    let isMounted = true;
     const checkFollowStatus = async () => {
-      const postUserId = props.post.user?._id || props.post.user;
-      if (postUserId && postUserId !== currentUserId) {
-        try {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`${API_BASE_URL}/user-profile/${postUserId}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            setIsFollowing(data.isFollowing || false);
-            // Check if there's a pending follow request by looking at the user's data
-            setFollowRequestSent(false); // We'll determine this from the response
-          } else {
-            console.log('Failed to check follow status');
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const response = await fetch(`${API_BASE_URL}/user-profile/${postUserId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const status = {
+            isFollowing: !!data.isFollowing,
+            followRequestSent: !!data.followRequestSent
+          };
+          followStatusCache.set(postUserId, status);
+
+          if (isMounted) {
+            setIsFollowing(status.isFollowing);
+            setFollowRequestSent(status.followRequestSent);
           }
-        } catch (error) {
-          console.error('Error checking follow status:', error);
-          // Set default states on error
-          setIsFollowing(false);
-          setFollowRequestSent(false);
         }
+      } catch (error) {
+        console.error('Follow check error:', error);
       }
     };
 
     checkFollowStatus();
-  }, [props.post.user, currentUserId]);
 
-  const handleFollow = async (userId) => {
-    if (followLoading) return;
-    
+    return () => {
+      isMounted = false;
+    };
+  }, [postUserId, isPostOwner]);
+
+  const showToast = (message) => {
+    setNotification(message);
+    setShowNotification(true);
+    setTimeout(() => setShowNotification(false), 3000);
+  };
+
+  const handleFollowToggle = async () => {
+    if (followLoading || !postUserId) return;
+    setFollowLoading(true);
+
     try {
-      setFollowLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/follow/follow/${userId}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.message && result.message.includes('request sent')) {
-          setFollowRequestSent(true);
-          setDeleteNotification('Follow request sent!');
-        } else {
-          setIsFollowing(true);
-          setDeleteNotification('Successfully followed!');
-        }
-        setShowNotification(true);
-        setTimeout(() => setShowNotification(false), 3000);
-      } else {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to follow user' }));
-        throw new Error(errorData.message || 'Failed to follow user');
-      }
-    } catch (error) {
-      console.error('Follow error:', error);
-      setDeleteNotification(error.message || 'Failed to follow user');
-      setShowNotification(true);
-      setTimeout(() => setShowNotification(false), 3000);
-    } finally {
-      setFollowLoading(false);
-    }
-  };
-
-  const handleUnfollow = async (userId) => {
-    if (followLoading) return;
-    
-    try {
-      setFollowLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/follow/unfollow/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        setIsFollowing(false);
-        setFollowRequestSent(false);
-        setDeleteNotification('Successfully unfollowed!');
-        setShowNotification(true);
-        setTimeout(() => setShowNotification(false), 3000);
-      } else {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to unfollow user' }));
-        throw new Error(errorData.message || 'Failed to unfollow user');
-      }
-    } catch (error) {
-      console.error('Unfollow error:', error);
-      setDeleteNotification(error.message || 'Failed to unfollow user');
-      setShowNotification(true);
-      setTimeout(() => setShowNotification(false), 3000);
-    } finally {
-      setFollowLoading(false);
-    }
-  };
-
-  const handleLike = async (postId) => {
-    if (props.onLike) {
-      props.onLike(postId);
-    }
-  };
-
-  const handleDelete = async (postId) => {
-    setShowDeleteModal(false);
-    try {
-        const response = await fetch(`${API_BASE_URL}/deletePost/${postId}`, {
-            method: 'DELETE',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                'Content-Type': 'application/json'
-            }
+      if (isFollowing) {
+        // Unfollow
+        const response = await fetch(`${API_BASE_URL}/follow/unfollow/${postUserId}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
 
         if (response.ok) {
-            // Show success notification
-            setDeleteNotification('Post deleted successfully!');
-            setShowNotification(true);
-            
-            // Hide notification after 3 seconds
-            setTimeout(() => {
-                setShowNotification(false);
-            }, 3000);
-
-            // Call the onDelete prop to update the UI
-            if (props.onDelete) {
-                props.onDelete(postId);
-            }
+          setIsFollowing(false);
+          setFollowRequestSent(false);
+          followStatusCache.set(postUserId, { isFollowing: false, followRequestSent: false });
+          showToast('Unfollowed');
         } else {
-            const errorData = await response.json();
-            setDeleteNotification(errorData.message || 'Failed to delete post');
-            setShowNotification(true);
-            setTimeout(() => {
-                setShowNotification(false);
-            }, 3000);
+          showToast('Failed to unfollow');
         }
-    } catch (error) {
-        console.error('Delete error:', error);
-        setDeleteNotification('Failed to delete post. Please try again.');
-        setShowNotification(true);
-        setTimeout(() => {
-            setShowNotification(false);
-        }, 3000);
+      } else {
+        // Follow
+        const response = await fetch(`${API_BASE_URL}/follow/follow/${postUserId}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.message && result.message.includes('request sent')) {
+            setFollowRequestSent(true);
+            followStatusCache.set(postUserId, { isFollowing: false, followRequestSent: true });
+            showToast('Follow request sent');
+          } else {
+            setIsFollowing(true);
+            followStatusCache.set(postUserId, { isFollowing: true, followRequestSent: false });
+            showToast('Following');
+          }
+        } else {
+          showToast('Failed to follow');
+        }
+      }
+    } catch (err) {
+      console.error('Follow error:', err);
+      showToast('Action failed');
+    } finally {
+      setFollowLoading(false);
     }
   };
 
-  const confirmDelete = () => {
-    setShowDeleteModal(true);
+  const handleDelete = async () => {
+    try {
+      setIsDeleting(true);
+      const response = await fetch(`${API_BASE_URL}/deletePost/${post._id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        setShowDeleteModal(false);
+        if (onDelete) onDelete(post._id);
+      } else {
+        showToast('Failed to delete post');
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      showToast('Error deleting post');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+    }
   };
 
-  // Generate avatar from username if no avatar available
   const getAvatarSrc = () => {
-    // console.log('Post data:', props.post);
-    // console.log('User data:', props.post.user);
-    if (props.post.user?.avatar) {
-      return props.post.user.avatar;
-    }
-    const username = props.post.user?.username || props.post.username || 'User';
+    if (post.user?.avatar) return post.user.avatar;
+    const username = post.user?.username || post.username || 'User';
     return `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
   };
-  
+
   return (
     <>
-      {/* Notification Alert */}
       {showNotification && (
-        <Alert 
-          variant={deleteNotification.includes('successfully') ? 'success' : 'danger'}
+        <Alert
+          variant="dark"
           style={{
             position: 'fixed',
-            top: '20px',
-            right: '20px',
+            bottom: '24px',
+            right: '24px',
             zIndex: 9999,
-            minWidth: '300px'
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-dropdown)',
+            fontSize: '0.875rem'
           }}
           dismissible
           onClose={() => setShowNotification(false)}
         >
-          {deleteNotification}
+          {notification}
         </Alert>
       )}
 
       {/* Delete Confirmation Modal */}
-      <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
+      <Modal
+        show={showDeleteModal}
+        onHide={() => setShowDeleteModal(false)}
+        centered
+        size="sm"
+      >
         <Modal.Header closeButton>
-          <Modal.Title>Delete Post</Modal.Title>
+          <Modal.Title style={{ fontSize: '1rem', fontWeight: 600 }}>Delete Post</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          <p>Are you sure you want to delete this post? This action cannot be undone.</p>
+        <Modal.Body style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+          Are you sure you want to delete this post? This action cannot be undone.
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+        <Modal.Footer className="d-flex justify-content-end gap-2">
+          <button
+            className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+            onClick={() => setShowDeleteModal(false)}
+            disabled={isDeleting}
+          >
             Cancel
-          </Button>
-          <Button variant="danger" onClick={() => handleDelete(props.post._id)}>
-            Delete Post
-          </Button>
+          </button>
+          <button
+            className="btn-minimal btn-minimal-danger btn-minimal-sm"
+            onClick={handleDelete}
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </button>
         </Modal.Footer>
       </Modal>
 
-      <Card 
-        key={props.post._id} 
-        className="mb-4 shadow-sm border-0" 
-        style={{ 
-          borderRadius: "15px",
-          overflow: "hidden"
-        }}
-      >
-        <Card.Body className="p-4">
-          {/* Post Header */}
-          <div className="d-flex align-items-center mb-3">
+      {/* Minimalist Card */}
+      <article className="minimal-card">
+        {/* Header */}
+        <header className="post-header">
+          <div className="d-flex align-items-center">
             <Image
               src={getAvatarSrc()}
-              roundedCircle
-              style={{ 
-                width: "45px", 
-                height: "45px",
-                marginRight: "12px",
-                border: "2px solid #667eea",
-                objectFit: "cover",
-                cursor: "pointer"
-              }}
-              alt="User Avatar"
-              onClick={() => navigate(`/user/${props.post.user?._id || props.post.user}`)}
+              className="post-avatar"
+              onClick={() => navigate(`/user/${postUserId}`)}
+              alt={post.user?.username || 'User'}
             />
-            <div className="flex-grow-1">
-              <div className="d-flex align-items-center justify-content-between">
-                <h6 
-                  className="mb-0 fw-bold" 
-                  style={{ cursor: "pointer", color: "#667eea" }}
-                  onClick={() => navigate(`/user/${props.post.user?._id || props.post.user}`)}
-                >
-                  {props.post.user?.username || props.post.username}
-                </h6>
-                {/* Follow button for other users */}
-                {(props.post.user?._id !== currentUserId && props.post.user !== currentUserId) && (
-                  <div className="ms-2 d-flex gap-2">
-                    {isFollowing ? (
-                      <Button
-                        variant="outline-danger"
-                        size="sm"
-                        onClick={() => handleUnfollow(props.post.user?._id || props.post.user)}
-                        disabled={followLoading}
-                        style={{ borderRadius: "15px", fontSize: "17px", padding: "2px 8px" }}
-                      >
-                        {followLoading ? 'Loading...' : 'Unfollow'}
-                      </Button>
-                    ) : followRequestSent ? (
-                      <Button
-                        variant="outline-secondary"
-                        size="sm"
-                        disabled
-                        style={{ borderRadius: "15px", fontSize: "17px", padding: "2px 8px" }}
-                      >
-                        Requested
-                      </Button>
-                    ) : (
-                      <Button
-                        style={{
-                          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                          border: "none",
-                          borderRadius: "15px",
-                          fontSize: "17px",
-                          padding: "2px 8px"
-                        }}
-                        size="sm"
-                        onClick={() => handleFollow(props.post.user?._id || props.post.user)}
-                        disabled={followLoading}
-                      >
-                        {followLoading ? 'Loading...' : 'Follow'}
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline-primary"
-                      size="sm"
-                      onClick={() => handleMessage(props.post.user?._id || props.post.user)}
-                      style={{ borderRadius: "15px", fontSize: "17px", padding: "2px 8px" }}
-                    >
-                      Message
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <small className="text-muted">{timeAgo(props.post.timestamp)}</small>
+            <div className="post-user-info">
+              <span
+                className="post-username"
+                onClick={() => navigate(`/user/${postUserId}`)}
+              >
+                {post.user?.username || post.username || 'Anonymous'}
+              </span>
+              <span className="post-timestamp">{timeAgo(post.timestamp)}</span>
             </div>
-            {/* Three dots menu - only show for posts owned by current user */}
-            {(props.post.user?._id === currentUserId || props.post.user === currentUserId) && (
-              <Button
-                variant="outline-danger"
-                size="sm"
-                onClick={confirmDelete}
-                style={{ 
-                  borderRadius: "50%", 
-                  width: "35px", 
-                  height: "35px",
-                  color: "#dc3545"
-                }}
+          </div>
+
+          <div className="d-flex align-items-center gap-2">
+            {!isPostOwner && (
+              <>
+                <button
+                  className={`btn-minimal btn-minimal-sm ${
+                    isFollowing ? 'btn-minimal-secondary' : 'btn-minimal-primary'
+                  }`}
+                  onClick={handleFollowToggle}
+                  disabled={followLoading || followRequestSent}
+                >
+                  {followLoading ? (
+                    <Spinner animation="border" size="sm" />
+                  ) : isFollowing ? (
+                    'Following'
+                  ) : followRequestSent ? (
+                    'Requested'
+                  ) : (
+                    'Follow'
+                  )}
+                </button>
+                <button
+                  className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+                  onClick={() => navigate(`/chat?userId=${postUserId}`)}
+                  title="Message user"
+                >
+                  Message
+                </button>
+              </>
+            )}
+
+            {isPostOwner && (
+              <button
+                className="btn-icon-minimal"
+                onClick={() => setShowDeleteModal(true)}
                 title="Delete post"
               >
-                🗑️
-              </Button>
+                <span style={{ fontSize: '0.9rem' }}>🗑️</span>
+              </button>
             )}
           </div>
+        </header>
 
-          {/* Post Caption */}
-          <h6 className="mb-2 fw-bold">{props.post.title}</h6>
-          <p className="mb-3 text-muted">{props.post.content}</p>
+        {/* Post Content */}
+        <div className="post-body">
+          {post.title && <h3 className="post-title">{post.title}</h3>}
+          {post.content && <p className="post-text">{post.content}</p>}
+        </div>
 
-          {/* Post Image */}
-          {props.post.image && (
-            <div style={{ 
-              margin: "0 -1.5rem",
-              marginBottom: "15px"
-            }}>
-              <img
-                src={props.post.image}
-                alt={props.post.title}
-                style={{ 
-                  width: "100%",
-                  height: "auto",
-                  maxHeight: "500px",
-                  objectFit: "cover"
-                }}
-              />
-            </div>
-          )}
-
-          {/* Post Stats */}
-          <div className="d-flex justify-content-between align-items-center mb-3 px-2">
-            <div className="d-flex align-items-center">
-              <span style={{ fontSize: "18px", marginRight: "5px" }}>❤️</span>
-              <span className="text-muted">{props.post.likes ? props.post.likes.length : 0} likes</span>
-            </div>
+        {/* Media */}
+        {post.image && (
+          <div className="post-media">
+            <img
+              src={post.image}
+              alt={post.title || 'Post attachment'}
+              className="post-image"
+              loading="lazy"
+            />
           </div>
+        )}
 
-          {/* Post Actions */}
-          <div className="d-flex justify-content-around border-top pt-2">
-            <Button
-              variant="light"
-              className="flex-grow-1 border-0"
-              onClick={() => handleLike(props.post._id)}
-              style={{ 
-                color: isLiked ? "#e91e63" : "#65676b",
-                background: !isLiked ? "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)" : "transparent",
-                fontWeight:"600"
-              }}
+        {/* Footer Actions */}
+        <footer className="post-footer">
+          <div className="d-flex align-items-center gap-3">
+            <button
+              className={`post-action-btn ${isLiked ? 'active-like' : ''}`}
+              onClick={() => onLike && onLike(post._id)}
+              aria-label={isLiked ? 'Unlike post' : 'Like post'}
             >
-              {isLiked ? "🤍 Unlike" : " ❤️Like"}
-            </Button>
-            
-            
-            
-            {/* <Button
-              variant="light"
-              className="flex-grow-1 border-0"
-              style={{ 
-                color: "#65676b",
-                backgroundColor: "transparent",
-                fontWeight: "600"
-              }}
+              <span>{isLiked ? '❤️' : '🤍'}</span>
+              <span>{post.likes ? post.likes.length : 0}</span>
+            </button>
+
+            <button
+              className="post-action-btn"
+              onClick={() => navigate(`/chat?userId=${postUserId}`)}
+              aria-label="Send direct message"
             >
-              📤 Share
-            </Button> */}
+              <span>💬</span>
+              <span>Chat</span>
+            </button>
           </div>
-        </Card.Body>
-      </Card>
+        </footer>
+      </article>
     </>
   );
 }
+
+export default memo(FeedPost);

@@ -1,231 +1,241 @@
-import React, {  useState } from 'react'
-import {  Col, Card, Button, Modal, Alert } from "react-bootstrap";
+import React, { useState, memo } from 'react';
+import { Col, Card, Modal, Alert } from 'react-bootstrap';
 import { timeAgo } from './FeedPost';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
 
-export default function Post({post, onLike, onDelete}) {
-    const navigate = useNavigate(); 
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [deleteNotification, setDeleteNotification] = useState('');
-    const [showNotification, setShowNotification] = useState(false);
-    
-    const getCurrentUserId = () => {
-        const token = localStorage.getItem('token');
-        if (token) {
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            return payload.userId;
-          } catch (error) {
-            return null;
-          }
-        }
+function Post({ post, onLike, onDelete }) {
+  const navigate = useNavigate();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [notification, setNotification] = useState('');
+  const [showNotification, setShowNotification] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const getCurrentUserId = () => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.userId;
+      } catch {
         return null;
-    };
+      }
+    }
+    return null;
+  };
 
-    const currentUserId = getCurrentUserId();
-    const isLiked = post.likes && post.likes.includes(currentUserId);
+  const currentUserId = getCurrentUserId();
+  const isPostOwner = currentUserId && (currentUserId === post.userId || currentUserId === post.user?._id || currentUserId === post.user);
+  const isLiked = Array.isArray(post.likes) && post.likes.includes(currentUserId);
 
-    const handleLike = async (postId) => {
-        if (onLike) {
-            onLike(postId);
+  const showToast = (message) => {
+    setNotification(message);
+    setShowNotification(true);
+    setTimeout(() => setShowNotification(false), 3000);
+  };
+
+  const handleDelete = async () => {
+    try {
+      setIsDeleting(true);
+      const response = await fetch(`${API_BASE_URL}/deletePost/${post._id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
         }
-    };
+      });
 
-    const handleDelete = async (postId) => {
+      if (response.ok) {
         setShowDeleteModal(false);
-        try {
-            const response = await fetch(`${API_BASE_URL}/deletePost/${postId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+        if (onDelete) onDelete(post._id);
+      } else {
+        showToast('Failed to delete post');
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      showToast('Error deleting post');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
 
-            if (response.ok) {
-                // Show success notification
-                setDeleteNotification('Post deleted successfully!');
-                setShowNotification(true);
-                
-                // Hide notification after 3 seconds
-                setTimeout(() => {
-                    setShowNotification(false);
-                }, 3000);
+  return (
+    <>
+      {showNotification && (
+        <Alert
+          variant="dark"
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 9999,
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-dropdown)',
+            fontSize: '0.875rem'
+          }}
+          dismissible
+          onClose={() => setShowNotification(false)}
+        >
+          {notification}
+        </Alert>
+      )}
 
-                // Call the onDelete prop to update the UI
-                if (onDelete) {
-                    onDelete(postId);
-                }
-            } else {
-                const errorData = await response.json();
-                setDeleteNotification(errorData.message || 'Failed to delete post');
-                setShowNotification(true);
-                setTimeout(() => {
-                    setShowNotification(false);
-                }, 3000);
-            }
-        } catch (error) {
-            console.error('Delete error:', error);
-            setDeleteNotification('Failed to delete post. Please try again.');
-            setShowNotification(true);
-            setTimeout(() => {
-                setShowNotification(false);
-            }, 3000);
-        }
-    };
+      {/* Delete Confirmation Modal */}
+      <Modal
+        show={showDeleteModal}
+        onHide={() => setShowDeleteModal(false)}
+        centered
+        size="sm"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title style={{ fontSize: '1rem', fontWeight: 600 }}>Delete Post</Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+          Are you sure you want to delete this post?
+        </Modal.Body>
+        <Modal.Footer className="d-flex justify-content-end gap-2">
+          <button
+            className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+            onClick={() => setShowDeleteModal(false)}
+            disabled={isDeleting}
+          >
+            Cancel
+          </button>
+          <button
+            className="btn-minimal btn-minimal-danger btn-minimal-sm"
+            onClick={handleDelete}
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </button>
+        </Modal.Footer>
+      </Modal>
 
-    const confirmDelete = () => {
-        setShowDeleteModal(true);
-    };
+      <Col xs={12} sm={6} lg={4}>
+        <Card
+          className="h-100 minimal-card m-0"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+          }}
+        >
+          {/* Post Media */}
+          {post.image && (
+            <div
+              style={{
+                height: '200px',
+                overflow: 'hidden',
+                backgroundColor: 'var(--bg-subtle)',
+                cursor: isPostOwner ? 'pointer' : 'default',
+              }}
+              onClick={() => {
+                if (isPostOwner) navigate(`/editPost/${post._id}`);
+              }}
+            >
+              <Card.Img
+                variant="top"
+                src={post.image}
+                loading="lazy"
+                style={{
+                  height: '100%',
+                  objectFit: 'cover',
+                  width: '100%',
+                }}
+              />
+            </div>
+          )}
 
-    return (
-        <>
-            {/* Notification Alert */}
-            {showNotification && (
-                <Alert 
-                    variant={deleteNotification.includes('successfully') ? 'success' : 'danger'}
-                    style={{
-                        position: 'fixed',
-                        top: '20px',
-                        right: '20px',
-                        zIndex: 9999,
-                        minWidth: '300px'
-                    }}
-                    dismissible
-                    onClose={() => setShowNotification(false)}
+          <Card.Body className="p-3 d-flex flex-column justify-content-between flex-grow-1">
+            <div>
+              <div className="d-flex justify-content-between align-items-start mb-1">
+                <Card.Title
+                  className="mb-1"
+                  style={{
+                    fontSize: '0.95rem',
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 1,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
                 >
-                    {deleteNotification}
-                </Alert>
-            )}
+                  {post.title}
+                </Card.Title>
 
-            {/* Delete Confirmation Modal */}
-            <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
-                <Modal.Header closeButton>
-                    <Modal.Title>Delete Post</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <p>Are you sure you want to delete this post? This action cannot be undone.</p>
-                </Modal.Body>
-                <Modal.Footer>
-                    <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
-                        Cancel
-                    </Button>
-                    <Button variant="danger" onClick={() => handleDelete(post._id)}>
-                        Delete Post
-                    </Button>
-                </Modal.Footer>
-            </Modal>
-
-            <Col key={post._id} xs={12} sm={6} lg={4}>
-                <Card
-                    className="h-100 shadow-sm border-0"
-                    style={{
-                        borderRadius: "15px",
-                        overflow: "hidden",
-                        cursor: "pointer",
-                        transition: "transform 0.3s",
+                {isPostOwner && (
+                  <button
+                    className="btn-icon-minimal"
+                    style={{ width: '28px', height: '28px' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDeleteModal(true);
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-5px)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
+                    title="Delete post"
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
+
+              <Card.Text
+                style={{
+                  fontSize: '0.875rem',
+                  color: 'var(--text-secondary)',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  marginBottom: '0.5rem',
+                }}
+              >
+                {post.content}
+              </Card.Text>
+              <small className="post-timestamp">{timeAgo(post.timestamp)}</small>
+            </div>
+
+            {/* Bottom Row */}
+            <div
+              className="mt-3 pt-2 d-flex justify-content-between align-items-center"
+              style={{ borderTop: '1px solid var(--border-subtle)' }}
+            >
+              <div className="d-flex align-items-center gap-1">
+                <span style={{ fontSize: '0.85rem' }}>❤️</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {post.likes ? post.likes.length : 0}
+                </span>
+              </div>
+
+              <div className="d-flex align-items-center gap-2">
+                {isPostOwner && (
+                  <button
+                    className="btn-minimal btn-minimal-secondary btn-minimal-sm"
+                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                    onClick={() => navigate(`/editPost/${post._id}`)}
+                  >
+                    Edit
+                  </button>
+                )}
+                <button
+                  className="post-action-btn"
+                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onLike) onLike(post._id);
+                  }}
                 >
-                    {/* Post Image */}
-                    {post.image && (
-                        <div
-                            onClick={() => navigate(`/editPost/${post._id}`)}
-                            style={{ height: "300px", overflow: "hidden" }}
-                        >
-                            <Card.Img
-                                variant="top"
-                                src={post.image}
-                                style={{
-                                    height: "100%",
-                                    objectFit: "cover",
-                                    width: "100%",
-                                }}
-                            />
-                        </div>
-                    )}
-
-                    <Card.Body className="p-3">
-                        <div className="d-flex justify-content-between align-items-start">
-                            <div className="flex-grow-1">
-                                <Card.Title 
-                                    className="h6 mb-2 fw-bold" 
-                                    style={{ 
-                                        display: "-webkit-box",
-                                        WebkitLineClamp: 2,
-                                        WebkitBoxOrient: "vertical",
-                                        overflow: "hidden"
-                                    }}
-                                >
-                                    {post.title}
-                                </Card.Title>
-                                <Card.Text 
-                                    className="text-muted small mb-2"
-                                    style={{ 
-                                        display: "-webkit-box",
-                                        WebkitLineClamp: 2,
-                                        WebkitBoxOrient: "vertical",
-                                        overflow: "hidden"
-                                    }}
-                                >
-                                    {post.content}
-                                </Card.Text>
-                                <small className="text-muted">{timeAgo(post.timestamp)}</small>
-                            </div>
-                            
-                            {/* Delete button */}
-                            {currentUserId===post.userId && (
-                                <Button
-                                    variant="outline-danger"
-                                    size="sm"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        confirmDelete();
-                                }}
-                                style={{ 
-                                    borderRadius: "50%", 
-                                    width: "30px", 
-                                    height: "30px",
-                                    padding: "0",
-                                    fontSize: "12px"
-                                }}
-                                title="Delete post"
-                            >
-                                🗑️
-                            </Button>)}
-                        </div>
-
-                        {/* Post stats and actions */}
-                        <div className="mt-3 pt-2 border-top">
-                            <div className="d-flex justify-content-between align-items-center">
-                                <div className="d-flex align-items-center">
-                                    <span style={{ fontSize: "14px", marginRight: "5px" }}>❤️</span>
-                                    <span className="text-muted small">{post.likes ? post.likes.length : 0} likes</span>
-                                </div>
-                                <Button
-                                    variant="light"
-                                    size="sm"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleLike(post._id);
-                                    }}
-                                    style={{ 
-                                        color: isLiked ? "#e91e63" : "#65676b",
-                                        backgroundColor: "transparent",
-                                        border: "none",
-                                        fontWeight: "600",
-                                        fontSize: "12px"
-                                    }}
-                                >
-                                    {isLiked ? " 🤍 Unlike" : "❤️ Like"}
-                                </Button>
-                            </div>
-                        </div>
-                    </Card.Body>
-                </Card>
-            </Col>
-        </>
-    );
+                  {isLiked ? '❤️ Liked' : '🤍 Like'}
+                </button>
+              </div>
+            </div>
+          </Card.Body>
+        </Card>
+      </Col>
+    </>
+  );
 }
+
+export default memo(Post);
