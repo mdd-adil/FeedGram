@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Container, Card, Image, Form, Spinner } from "react-bootstrap";
+import { Container, Card, Image, Spinner } from "react-bootstrap";
 import { useNavigate } from "react-router-dom";
 import FeedPost from "./FeedPost";
 import { API_BASE_URL } from "../config/api";

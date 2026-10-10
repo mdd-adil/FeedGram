@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Container, Row, Col, Card, Form, ListGroup, Badge, Image, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Form, ListGroup, Badge, Image, Spinner } from 'react-bootstrap';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 import axios from 'axios';

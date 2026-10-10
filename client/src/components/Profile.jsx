@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Container, Row, Col, Card, Nav, Image, Alert, Spinner } from "react-bootstrap";
+import { Container, Row, Col, Nav, Image, Alert, Spinner } from "react-bootstrap";
 import { useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import Post from "./Post";

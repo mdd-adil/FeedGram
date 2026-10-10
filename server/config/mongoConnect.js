@@ -1,10 +1,18 @@
 const mongoose = require('mongoose');
-const env=require('dotenv').config();
-const mongoDb=mongoose.connect(process.env.MONGO_URL)
-.then(()=>{
+
+const mongoUri = process.env.MONGO_URL;
+
+if (!mongoUri) {
+  console.error("MongoDB Error: MONGO_URL environment variable is not defined!");
+}
+
+const mongoDb = mongoose.connect(mongoUri)
+  .then(() => {
     console.log("Database connected successfully");
-}).catch((err)=>{
-    console.log(err.message);  
+  })
+  .catch((err) => {
+    console.error("MongoDB Connection Failed:", err.message);
     process.exit(1);
-});
-module.exports=mongoDb
+  });
+
+module.exports = mongoDb;
