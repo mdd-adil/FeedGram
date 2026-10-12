@@ -1,7 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/userModel');
-const { formatPhoneNumber } = require('../config/twilioService');
+const { formatPhoneNumber, classifyIdentifier } = require('../middleware/validators');
 
 const loginUser = async (req, res) => {
   const { email, identifier, phone, password } = req.body;
@@ -9,12 +9,13 @@ const loginUser = async (req, res) => {
 
   try {
     if (!loginIdentifier || !password) {
-      return res.status(400).json({ message: 'Email/Phone and password are required' });
+      return res.status(400).json({ message: 'Email/Phone/Username and password are required' });
     }
 
+    const classification = classifyIdentifier(loginIdentifier);
     const formattedPhone = formatPhoneNumber(loginIdentifier);
 
-    // Find user by email, phone, or username
+    // Find user by email, formatted phone, raw phone, or username
     const user = await userModel.findOne({
       $or: [
         { email: loginIdentifier.toLowerCase() },
@@ -25,7 +26,9 @@ const loginUser = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials. Please check your username, email, or phone.' });
+      return res.status(401).json({
+        message: 'No account found with this username, email, or phone number.'
+      });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -46,7 +49,15 @@ const loginUser = async (req, res) => {
       maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
     });
 
-    res.status(200).json({ token, user: { _id: user._id, username: user.username, email: user.email, phone: user.phone } });
+    res.status(200).json({
+      token,
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        phone: user.phone
+      }
+    });
   } catch (error) {
     console.error('Login error:', error.message);
     res.status(500).json({ message: 'Server error during login' });

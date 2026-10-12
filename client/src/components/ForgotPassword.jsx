@@ -3,18 +3,19 @@ import { Form, Alert, Spinner, InputGroup } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import axios from 'axios';
 import { API_BASE_URL } from "../config/api";
+import { validateClientPhone, validateClientEmail } from "../utils/validators";
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
 
-  // Step 1: Request OTP, Step 2: Enter OTP & Set New Password
+  // Step 1: Request WhatsApp OTP, Step 2: Enter WhatsApp OTP & Set New Password
   const [step, setStep] = useState(1);
   const [identifier, setIdentifier] = useState("");
-  const [channel, setChannel] = useState("whatsapp"); // 'whatsapp' or 'email'
   const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [targetPhone, setTargetPhone] = useState("");
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -32,12 +33,32 @@ const ForgotPassword = () => {
     return () => clearTimeout(timer);
   }, [resendCooldown]);
 
-  // Step 1: Send OTP to Phone (WhatsApp) or Email
+  // Step 1: Send WhatsApp OTP
   const handleSendOtp = async (e) => {
     if (e) e.preventDefault();
-    if (!identifier.trim()) {
-      setError("Please enter your registered phone number or email address.");
+    const raw = identifier.trim();
+    if (!raw) {
+      setError("Please enter your registered phone number, email, or username.");
       return;
+    }
+
+    // If it's pure email format, validate it
+    if (raw.includes('@')) {
+      const emailCheck = validateClientEmail(raw);
+      if (!emailCheck.isValid) {
+        setError(emailCheck.message);
+        return;
+      }
+    } else {
+      // If it looks like a phone number, validate phone format
+      const digits = raw.replace(/[\s\-()]/g, '');
+      if (digits.startsWith('+') || /^\d{8,15}$/.test(digits)) {
+        const phoneCheck = validateClientPhone(raw);
+        if (!phoneCheck.isValid) {
+          setError(phoneCheck.message);
+          return;
+        }
+      }
     }
 
     setIsLoading(true);
@@ -46,27 +67,29 @@ const ForgotPassword = () => {
 
     try {
       const response = await axios.post(`${API_BASE_URL}/forgot-password/send-otp`, {
-        identifier: identifier.trim(),
-        channel
+        identifier: raw,
+        channel: 'whatsapp'
       });
 
-      setMessage(response.data?.message || `Verification code sent via ${channel === 'whatsapp' ? 'WhatsApp' : 'Email'}`);
+      const recipient = response.data?.phone || raw;
+      setTargetPhone(recipient);
+      setMessage(response.data?.message || `WhatsApp verification code sent to ${recipient}`);
       setStep(2);
       setResendCooldown(45);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to send reset code. Please check your phone or email.");
+      setError(err.response?.data?.message || "Failed to send WhatsApp reset code. Please check your phone number or account.");
       console.error("Forgot password error:", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Step 2: Verify OTP and update password
+  // Step 2: Verify WhatsApp OTP and update password
   const handleResetPassword = async (e) => {
     e.preventDefault();
 
     if (!otp.trim() || otp.trim().length !== 6) {
-      setError("Please enter the 6-digit verification code.");
+      setError("Please enter the 6-digit WhatsApp verification code.");
       return;
     }
 
@@ -87,7 +110,7 @@ const ForgotPassword = () => {
     try {
       const response = await axios.post(`${API_BASE_URL}/forgot-password/reset`, {
         identifier: identifier.trim(),
-        channel,
+        channel: 'whatsapp',
         otp: otp.trim(),
         password,
         confirmPassword
@@ -98,14 +121,14 @@ const ForgotPassword = () => {
         navigate("/login");
       }, 1500);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to reset password. Please check your code.");
+      setError(err.response?.data?.message || "Failed to reset password. Please check your WhatsApp code.");
       console.error("Reset password error:", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Resend code handler
+  // Resend WhatsApp OTP handler
   const handleResend = async () => {
     if (resendCooldown > 0 || isLoading) return;
     setError("");
@@ -114,13 +137,13 @@ const ForgotPassword = () => {
     try {
       const response = await axios.post(`${API_BASE_URL}/forgot-password/send-otp`, {
         identifier: identifier.trim(),
-        channel
+        channel: 'whatsapp'
       });
 
-      setMessage(response.data?.message || `New code sent via ${channel === 'whatsapp' ? 'WhatsApp' : 'Email'}!`);
+      setMessage(response.data?.message || `New WhatsApp code sent!`);
       setResendCooldown(45);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to resend code.");
+      setError(err.response?.data?.message || "Failed to resend WhatsApp code.");
     } finally {
       setIsLoading(false);
     }
@@ -138,13 +161,13 @@ const ForgotPassword = () => {
           {step === 1 ? (
             <>
               <h1>Reset password</h1>
-              <p>Verify via WhatsApp or email to reset your password</p>
+              <p>Receive a verification code via WhatsApp to reset your password</p>
             </>
           ) : (
             <>
               <h1>Set new password</h1>
               <p>
-                Enter the code sent to <strong>{identifier}</strong>
+                Enter the WhatsApp code sent to <strong>{targetPhone || identifier}</strong>
               </p>
             </>
           )}
@@ -154,43 +177,26 @@ const ForgotPassword = () => {
         {message && <Alert variant="success" dismissible onClose={() => setMessage("")}>{message}</Alert>}
 
         {step === 1 ? (
-          /* Step 1: Phone or Email Input Form */
+          /* Step 1: Identifier Input Form */
           <Form onSubmit={handleSendOtp}>
             <Form.Group className="mb-3">
-              <Form.Label>Phone Number or Email</Form.Label>
+              <Form.Label>Phone Number, Email, or Username</Form.Label>
               <Form.Control
                 type="text"
-                placeholder="e.g. +14155552671 or name@example.com"
+                placeholder="e.g. +91 9876543210 or your email"
                 value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                onChange={(e) => {
+                  setIdentifier(e.target.value);
+                  if (error) setError("");
+                }}
                 required
                 autoComplete="username"
               />
               <Form.Text className="text-muted" style={{ fontSize: "0.75rem" }}>
-                For phone, include country code (e.g. +91 or +1)
+                Your 6-digit verification code will be sent to your registered WhatsApp phone number.
               </Form.Text>
             </Form.Group>
 
-            {/* Channel Selection */}
-            <Form.Group className="mb-3">
-              <Form.Label>Receive OTP via</Form.Label>
-              <div className="d-flex gap-2">
-                <button
-                  type="button"
-                  className={`btn-minimal w-50 py-2 ${channel === 'whatsapp' ? 'btn-minimal-primary' : 'btn-minimal-secondary'}`}
-                  onClick={() => setChannel('whatsapp')}
-                >
-                  💬 WhatsApp
-                </button>
-                <button
-                  type="button"
-                  className={`btn-minimal w-50 py-2 ${channel === 'email' ? 'btn-minimal-primary' : 'btn-minimal-secondary'}`}
-                  onClick={() => setChannel('email')}
-                >
-                  ✉️ Email
-                </button>
-              </div>
-            </Form.Group>
 
             <button
               type="submit"
@@ -200,10 +206,10 @@ const ForgotPassword = () => {
               {isLoading ? (
                 <>
                   <Spinner animation="border" size="sm" className="me-2" />
-                  Sending Code...
+                  Sending WhatsApp Code...
                 </>
               ) : (
-                `Send ${channel === 'whatsapp' ? 'WhatsApp' : 'Email'} Code →`
+                "Send WhatsApp Verification Code →"
               )}
             </button>
 
@@ -221,11 +227,11 @@ const ForgotPassword = () => {
             </div>
           </Form>
         ) : (
-          /* Step 2: OTP & New Password Form */
+          /* Step 2: WhatsApp OTP & New Password Form */
           <Form onSubmit={handleResetPassword}>
             <Form.Group className="mb-3">
               <Form.Label className="d-block text-center mb-1">
-                6-Digit {channel === 'whatsapp' ? 'WhatsApp' : 'Email'} Code
+                6-Digit WhatsApp Code
               </Form.Label>
               <Form.Control
                 type="text"
@@ -238,9 +244,7 @@ const ForgotPassword = () => {
                 className="otp-input-field"
               />
               <Form.Text className="text-muted d-block text-center mt-2" style={{ fontSize: "0.75rem" }}>
-                {channel === 'whatsapp'
-                  ? 'Check your WhatsApp messages for the verification code'
-                  : 'Check your email inbox or spam folder for the code'}
+                Check your WhatsApp messages for the 6-digit code
               </Form.Text>
             </Form.Group>
 
@@ -249,22 +253,18 @@ const ForgotPassword = () => {
               <InputGroup>
                 <Form.Control
                   type={showPassword ? "text" : "password"}
-                  placeholder="Minimum 6 characters"
+                  placeholder="At least 6 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
+                  autoComplete="new-password"
                 />
                 <button
                   type="button"
-                  className="btn-minimal btn-minimal-secondary"
-                  style={{
-                    borderRadius: "0 var(--radius-md) var(--radius-md) 0",
-                    borderLeft: "none",
-                    padding: "0 0.85rem",
-                    fontSize: "0.85rem"
-                  }}
+                  className="btn-minimal btn-minimal-secondary px-3"
                   onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
                 >
                   {showPassword ? "Hide" : "Show"}
                 </button>
@@ -279,13 +279,15 @@ const ForgotPassword = () => {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
+                minLength={6}
+                autoComplete="new-password"
               />
             </Form.Group>
 
             <button
               type="submit"
               className="btn-minimal btn-minimal-primary w-100 py-2 mb-3"
-              disabled={isLoading || otp.length !== 6 || !password || !confirmPassword}
+              disabled={isLoading || otp.length !== 6 || password.length < 6}
             >
               {isLoading ? (
                 <>
@@ -293,7 +295,7 @@ const ForgotPassword = () => {
                   Updating Password...
                 </>
               ) : (
-                "Verify Code & Reset Password"
+                "Update Password"
               )}
             </button>
 
@@ -307,7 +309,7 @@ const ForgotPassword = () => {
                   setMessage("");
                 }}
               >
-                ← Change details
+                ← Back
               </button>
 
               <button
@@ -316,7 +318,7 @@ const ForgotPassword = () => {
                 onClick={handleResend}
                 disabled={resendCooldown > 0 || isLoading}
               >
-                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}
+                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend WhatsApp Code"}
               </button>
             </div>
           </Form>

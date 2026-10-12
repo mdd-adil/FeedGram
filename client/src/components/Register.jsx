@@ -3,17 +3,17 @@ import { useState, useEffect } from "react";
 import { Form, Alert, Spinner } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from '../config/api';
+import { validateClientEmail, validateClientPhone, formatClientPhone } from '../utils/validators';
 
 const SignUp = () => {
   const navigate = useNavigate();
 
-  // Step 1: details, Step 2: OTP verification
+  // Step 1: details, Step 2: WhatsApp OTP verification
   const [step, setStep] = useState(1);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [channel, setChannel] = useState("whatsapp"); // 'whatsapp' or 'email'
   const [otp, setOtp] = useState("");
 
   const [error, setError] = useState("");
@@ -32,12 +32,26 @@ const SignUp = () => {
     return () => clearTimeout(timer);
   }, [resendCooldown]);
 
-  // Step 1: Validate and send OTP
+  // Step 1: Validate and send WhatsApp OTP
   const handleSendOtp = async (e) => {
     if (e) e.preventDefault();
 
     if (!username.trim() || !email.trim() || !phone.trim() || !password) {
       setError("Please fill in all required fields (username, email, phone, and password).");
+      return;
+    }
+
+    // Client-side email validation
+    const emailValidation = validateClientEmail(email);
+    if (!emailValidation.isValid) {
+      setError(emailValidation.message);
+      return;
+    }
+
+    // Client-side phone validation
+    const phoneValidation = validateClientPhone(phone);
+    if (!phoneValidation.isValid) {
+      setError(phoneValidation.message);
       return;
     }
 
@@ -53,28 +67,27 @@ const SignUp = () => {
     try {
       const response = await axios.post(`${API_BASE_URL}/register/send-otp`, {
         username: username.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        channel
+        email: emailValidation.email,
+        phone: phoneValidation.phone
       });
 
-      setSuccess(response.data?.message || `Verification code sent via ${channel === 'whatsapp' ? 'WhatsApp' : 'Email'}`);
+      setSuccess(response.data?.message || `WhatsApp verification code sent to ${phoneValidation.phone}`);
       setStep(2);
       setResendCooldown(45);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to send verification code. Please check your phone/email.");
+      setError(err.response?.data?.message || "Failed to send WhatsApp verification code. Please check your phone number.");
       console.error("Send OTP error:", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Step 2: Submit OTP and create account
+  // Step 2: Submit WhatsApp OTP and create account
   const handleVerifyAndRegister = async (e) => {
     e.preventDefault();
 
     if (!otp.trim() || otp.trim().length !== 6) {
-      setError("Please enter the 6-digit verification code.");
+      setError("Please enter the 6-digit WhatsApp verification code.");
       return;
     }
 
@@ -82,12 +95,12 @@ const SignUp = () => {
     setError("");
 
     try {
+      const formattedPhone = formatClientPhone(phone);
       const response = await axios.post(`${API_BASE_URL}/register`, {
         username: username.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
+        email: email.trim().toLowerCase(),
+        phone: formattedPhone,
         password,
-        channel,
         otp: otp.trim()
       });
 
@@ -96,31 +109,31 @@ const SignUp = () => {
         navigate("/login");
       }, 1500);
     } catch (err) {
-      setError(err.response?.data?.message || "Invalid or expired verification code.");
+      setError(err.response?.data?.message || "Invalid or expired WhatsApp verification code.");
       console.error("Registration error:", err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Resend OTP handler
+  // Resend WhatsApp OTP handler
   const handleResend = async () => {
     if (resendCooldown > 0 || isLoading) return;
     setError("");
     setIsLoading(true);
 
     try {
+      const formattedPhone = formatClientPhone(phone);
       const response = await axios.post(`${API_BASE_URL}/register/send-otp`, {
         username: username.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        channel
+        email: email.trim().toLowerCase(),
+        phone: formattedPhone
       });
 
-      setSuccess(response.data?.message || `New verification code sent via ${channel === 'whatsapp' ? 'WhatsApp' : 'Email'}!`);
+      setSuccess(response.data?.message || `New WhatsApp verification code sent!`);
       setResendCooldown(45);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to resend code.");
+      setError(err.response?.data?.message || "Failed to resend WhatsApp code.");
     } finally {
       setIsLoading(false);
     }
@@ -138,13 +151,13 @@ const SignUp = () => {
           {step === 1 ? (
             <>
               <h1>Create an account</h1>
-              <p>Sign up to start connecting on FeedGram</p>
+              <p>Sign up and verify via WhatsApp OTP</p>
             </>
           ) : (
             <>
-              <h1>Verify with {channel === 'whatsapp' ? 'WhatsApp' : 'Email'}</h1>
+              <h1>Verify WhatsApp</h1>
               <p>
-                Code sent to <strong>{channel === 'whatsapp' ? phone : email}</strong>
+                Enter the 6-digit code sent to WhatsApp: <strong>{formatClientPhone(phone)}</strong>
               </p>
             </>
           )}
@@ -183,25 +196,35 @@ const SignUp = () => {
                 type="email"
                 placeholder="name@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError("");
+                }}
                 required
                 autoComplete="email"
               />
+              <Form.Text className="text-muted" style={{ fontSize: "0.75rem" }}>
+                Must be a valid email address (e.g. name@example.com)
+              </Form.Text>
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label>Phone Number (with Country Code)</Form.Label>
+              <Form.Label>WhatsApp Phone Number</Form.Label>
               <Form.Control
                 type="tel"
-                placeholder="e.g. +14155552671 or +919876543210"
+                placeholder="e.g. +91 9876543210 or +1 4155552671"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  if (error) setError("");
+                }}
                 required
                 autoComplete="tel"
               />
               <Form.Text className="text-muted" style={{ fontSize: "0.75rem" }}>
-                Include '+' and country code (e.g. +1 for US, +91 for India)
+                Include country code (e.g. +91 for India, +1 for US). OTP will be sent to WhatsApp.
               </Form.Text>
+
             </Form.Group>
 
             <Form.Group className="mb-3">
@@ -220,27 +243,6 @@ const SignUp = () => {
               </Form.Text>
             </Form.Group>
 
-            {/* OTP Verification Method Toggle */}
-            <Form.Group className="mb-3">
-              <Form.Label>Verify Account via</Form.Label>
-              <div className="d-flex gap-2">
-                <button
-                  type="button"
-                  className={`btn-minimal w-50 py-2 ${channel === 'whatsapp' ? 'btn-minimal-primary' : 'btn-minimal-secondary'}`}
-                  onClick={() => setChannel('whatsapp')}
-                >
-                  💬 WhatsApp
-                </button>
-                <button
-                  type="button"
-                  className={`btn-minimal w-50 py-2 ${channel === 'email' ? 'btn-minimal-primary' : 'btn-minimal-secondary'}`}
-                  onClick={() => setChannel('email')}
-                >
-                  ✉️ Email
-                </button>
-              </div>
-            </Form.Group>
-
             <button
               type="submit"
               className="btn-minimal btn-minimal-primary w-100 py-2 mt-2 mb-3"
@@ -249,10 +251,10 @@ const SignUp = () => {
               {isLoading ? (
                 <>
                   <Spinner animation="border" size="sm" className="me-2" />
-                  Sending Code...
+                  Sending WhatsApp OTP...
                 </>
               ) : (
-                `Send ${channel === 'whatsapp' ? 'WhatsApp' : 'Email'} Code →`
+                "Send WhatsApp Verification Code →"
               )}
             </button>
 
@@ -274,11 +276,11 @@ const SignUp = () => {
             </div>
           </Form>
         ) : (
-          /* Step 2: Enter WhatsApp or Email OTP */
+          /* Step 2: Enter WhatsApp OTP */
           <Form onSubmit={handleVerifyAndRegister}>
             <Form.Group className="mb-4">
               <Form.Label className="d-block text-center mb-2">
-                Enter 6-Digit Code
+                Enter 6-Digit WhatsApp Code
               </Form.Label>
               <Form.Control
                 type="text"
@@ -291,9 +293,7 @@ const SignUp = () => {
                 className="otp-input-field"
               />
               <Form.Text className="text-muted d-block text-center mt-2" style={{ fontSize: "0.8rem" }}>
-                {channel === 'whatsapp'
-                  ? 'Check your WhatsApp messages for the code'
-                  : 'Check your email inbox or spam folder for the code'}
+                Check your WhatsApp messages on {formatClientPhone(phone)} for the code
               </Form.Text>
             </Form.Group>
 
@@ -305,7 +305,7 @@ const SignUp = () => {
               {isLoading ? (
                 <>
                   <Spinner animation="border" size="sm" className="me-2" />
-                  Verifying...
+                  Verifying WhatsApp OTP...
                 </>
               ) : (
                 "Verify & Create Account"
@@ -331,7 +331,7 @@ const SignUp = () => {
                 onClick={handleResend}
                 disabled={resendCooldown > 0 || isLoading}
               >
-                {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend Code"}
+                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend WhatsApp OTP"}
               </button>
             </div>
           </Form>

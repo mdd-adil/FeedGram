@@ -2,15 +2,13 @@ const bcrypt = require('bcrypt');
 const userModel = require('../models/userModel');
 const {
   formatPhoneNumber,
-  verifyEmailOtp,
-  clearEmailOtp,
   verifyWhatsAppOtp,
   clearWhatsAppOtp
 } = require('../config/twilioService');
 
 const resetPassword = async (req, res) => {
-  const { email, phone, identifier, otp, token, password, confirmPassword, channel } = req.body;
-  const target = (phone || email || identifier || '').toString().trim();
+  const { phone, identifier, otp, token, password, confirmPassword } = req.body;
+  const target = (phone || identifier || '').toString().trim();
 
   try {
     if (!password || !confirmPassword) {
@@ -25,16 +23,16 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
 
-    // 1. If OTP is provided
+    // 1. If WhatsApp OTP is provided
     if (target && otp) {
       const formattedPhone = formatPhoneNumber(target);
-      const isPhone = channel === 'whatsapp' || !target.includes('@');
 
       const user = await userModel.findOne({
         $or: [
-          { email: target.toLowerCase() },
           { phone: target },
-          { phone: formattedPhone }
+          { phone: formattedPhone },
+          { email: target.toLowerCase() },
+          { username: target }
         ]
       });
 
@@ -42,16 +40,12 @@ const resetPassword = async (req, res) => {
         return res.status(404).json({ message: 'User account not found' });
       }
 
-      let verification;
-      if (isPhone) {
-        verification = await verifyWhatsAppOtp(user.phone || formattedPhone, otp);
-      } else {
-        verification = await verifyEmailOtp(user.email, otp);
-      }
+      const targetPhone = user.phone || formattedPhone;
+      const verification = await verifyWhatsAppOtp(targetPhone, otp);
 
       if (!verification.valid) {
         return res.status(400).json({
-          message: verification.message || 'Invalid or expired verification code'
+          message: verification.message || 'Invalid or expired WhatsApp verification code'
         });
       }
 
@@ -61,11 +55,7 @@ const resetPassword = async (req, res) => {
       user.resetPasswordExpires = null;
       await user.save();
 
-      if (isPhone) {
-        await clearWhatsAppOtp(user.phone || formattedPhone);
-      } else {
-        await clearEmailOtp(user.email);
-      }
+      await clearWhatsAppOtp(targetPhone);
 
       return res.status(200).json({
         message: 'Password has been reset successfully. You can now log in.',
@@ -96,10 +86,10 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    return res.status(400).json({ message: 'Verification code or token is required' });
+    return res.status(400).json({ message: 'WhatsApp verification code or token is required' });
   } catch (error) {
-    console.error('Reset password error:', error);
-    res.status(500).json({ message: 'Error resetting password. Please try again.' });
+    console.error('Password reset error:', error.message);
+    res.status(500).json({ message: 'Server error during password reset' });
   }
 };
 

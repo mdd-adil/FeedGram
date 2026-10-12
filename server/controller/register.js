@@ -1,104 +1,102 @@
 const bcrypt = require('bcrypt');
 const userModel = require('../models/userModel');
 const {
-  formatPhoneNumber,
   sendWhatsAppOtp,
   verifyWhatsAppOtp,
-  clearWhatsAppOtp,
-  sendEmailOtp,
-  verifyEmailOtp,
-  clearEmailOtp
+  clearWhatsAppOtp
 } = require('../config/twilioService');
+const {
+  validateEmail,
+  validatePhone
+} = require('../middleware/validators');
 
 /**
- * Step 1: Send OTP to phone (WhatsApp) or email before registration
+ * Step 1: Send WhatsApp OTP before registration
  */
 const sendRegisterOtp = async (req, res) => {
-  const { email, phone, username, channel = 'whatsapp' } = req.body;
+  const { email, phone, username } = req.body;
 
   try {
-    if (!email) {
-      return res.status(400).json({ message: 'Email address is required' });
+    // 1. Strict validation of Email
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) {
+      return res.status(400).json({ message: emailValidation.message });
     }
+    const trimmedEmail = emailValidation.email;
 
-    if (!phone) {
-      return res.status(400).json({ message: 'Phone number is required' });
+    // 2. Strict validation of Phone Number
+    const phoneValidation = validatePhone(phone);
+    if (!phoneValidation.isValid) {
+      return res.status(400).json({ message: phoneValidation.message });
     }
+    const formattedPhone = phoneValidation.phone;
 
-    const trimmedEmail = email.toLowerCase().trim();
-    const formattedPhone = formatPhoneNumber(phone);
+    // 3. Username validation
+    if (!username || !username.trim()) {
+      return res.status(400).json({ message: 'Username is required.' });
+    }
+    const trimmedUsername = username.trim();
 
     // Check if email already registered
     const existingEmail = await userModel.findOne({ email: trimmedEmail });
     if (existingEmail) {
-      return res.status(409).json({ message: 'An account with this email already exists' });
+      return res.status(409).json({ message: 'An account with this email already exists.' });
     }
 
     // Check if phone already registered
     const existingPhone = await userModel.findOne({ phone: formattedPhone });
     if (existingPhone) {
-      return res.status(409).json({ message: 'An account with this phone number already exists' });
+      return res.status(409).json({ message: 'An account with this phone number already exists.' });
     }
 
     // Check if username already taken
-    if (username) {
-      const existingUsername = await userModel.findOne({ username: username.trim() });
-      if (existingUsername) {
-        return res.status(409).json({ message: 'Username is already taken' });
-      }
+    const existingUsername = await userModel.findOne({ username: trimmedUsername });
+    if (existingUsername) {
+      return res.status(409).json({ message: 'Username is already taken.' });
     }
 
-    // Send OTP via chosen channel (WhatsApp by default, or Email)
-    if (channel === 'whatsapp') {
-      await sendWhatsAppOtp(formattedPhone, username, 'registration');
-      return res.status(200).json({
-        success: true,
-        channel: 'whatsapp',
-        message: `WhatsApp verification code sent to ${formattedPhone}`
-      });
-    } else {
-      await sendEmailOtp(trimmedEmail, username, 'registration');
-      return res.status(200).json({
-        success: true,
-        channel: 'email',
-        message: `Verification code sent to ${trimmedEmail}`
-      });
-    }
+    // Exclusively send OTP via WhatsApp
+    await sendWhatsAppOtp(formattedPhone, trimmedUsername, 'registration');
+
+    return res.status(200).json({
+      success: true,
+      channel: 'whatsapp',
+      phone: formattedPhone,
+      message: `WhatsApp verification code sent to ${formattedPhone}`
+    });
   } catch (error) {
-    console.error('Send OTP error:', error);
+    console.error('Send WhatsApp OTP error:', error);
     res.status(500).json({
-      message: error.message || 'Failed to send verification code. Please check your phone/email.'
+      message: error.message || 'Failed to send WhatsApp verification code. Please check your phone number.'
     });
   }
 };
 
 /**
- * Step 2: Validate the OTP
+ * Step 2: Validate the WhatsApp OTP
  */
 const verifyRegisterOtp = async (req, res) => {
-  const { email, phone, otp, channel = 'whatsapp' } = req.body;
+  const { phone, otp } = req.body;
 
   try {
     if (!otp) {
-      return res.status(400).json({ message: 'Verification code is required' });
+      return res.status(400).json({ message: 'WhatsApp verification code is required.' });
     }
 
-    let verification;
-    if (channel === 'whatsapp') {
-      if (!phone) return res.status(400).json({ message: 'Phone number is required' });
-      verification = await verifyWhatsAppOtp(phone, otp);
-    } else {
-      if (!email) return res.status(400).json({ message: 'Email address is required' });
-      verification = await verifyEmailOtp(email, otp);
+    const phoneValidation = validatePhone(phone);
+    if (!phoneValidation.isValid) {
+      return res.status(400).json({ message: phoneValidation.message });
     }
+
+    const verification = await verifyWhatsAppOtp(phoneValidation.phone, otp);
 
     if (!verification.valid) {
-      return res.status(400).json({ message: verification.message || 'Invalid or expired code' });
+      return res.status(400).json({ message: verification.message || 'Invalid or expired WhatsApp code.' });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Verification successful'
+      message: 'WhatsApp verification successful.'
     });
   } catch (error) {
     console.error('Verify OTP error:', error);
@@ -107,23 +105,29 @@ const verifyRegisterOtp = async (req, res) => {
 };
 
 /**
- * Step 3: Register user after validating OTP
+ * Step 3: Register user after validating WhatsApp OTP
  */
 const registerUser = async (req, res) => {
-  const { username, email, phone, password, otp, channel = 'whatsapp' } = req.body;
+  const { username, email, phone, password, otp } = req.body;
 
   try {
     if (!username || !email || !password || !phone) {
-      return res.status(400).json({ message: 'Username, email, phone, and password are required' });
+      return res.status(400).json({ message: 'Username, email, phone, and password are required.' });
     }
 
     if (!otp) {
-      return res.status(400).json({ message: 'Verification code is required to register' });
+      return res.status(400).json({ message: 'WhatsApp verification code is required to register.' });
     }
 
-    const trimmedEmail = email.toLowerCase().trim();
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) return res.status(400).json({ message: emailValidation.message });
+
+    const phoneValidation = validatePhone(phone);
+    if (!phoneValidation.isValid) return res.status(400).json({ message: phoneValidation.message });
+
+    const trimmedEmail = emailValidation.email;
+    const formattedPhone = phoneValidation.phone;
     const trimmedUsername = username.trim();
-    const formattedPhone = formatPhoneNumber(phone);
 
     // Check existing records
     const existingUser = await userModel.findOne({
@@ -131,22 +135,17 @@ const registerUser = async (req, res) => {
     });
 
     if (existingUser) {
-      if (existingUser.email === trimmedEmail) return res.status(409).json({ message: 'Email is already registered' });
-      if (existingUser.phone === formattedPhone) return res.status(409).json({ message: 'Phone number is already registered' });
-      if (existingUser.username === trimmedUsername) return res.status(409).json({ message: 'Username is already taken' });
+      if (existingUser.email === trimmedEmail) return res.status(409).json({ message: 'Email is already registered.' });
+      if (existingUser.phone === formattedPhone) return res.status(409).json({ message: 'Phone number is already registered.' });
+      if (existingUser.username === trimmedUsername) return res.status(409).json({ message: 'Username is already taken.' });
     }
 
-    // Verify OTP
-    let verification;
-    if (channel === 'whatsapp') {
-      verification = await verifyWhatsAppOtp(formattedPhone, otp);
-    } else {
-      verification = await verifyEmailOtp(trimmedEmail, otp);
-    }
+    // Verify WhatsApp OTP
+    const verification = await verifyWhatsAppOtp(formattedPhone, otp);
 
     if (!verification.valid) {
       return res.status(400).json({
-        message: verification.message || 'Invalid or expired verification code'
+        message: verification.message || 'Invalid or expired WhatsApp verification code.'
       });
     }
 
@@ -159,12 +158,8 @@ const registerUser = async (req, res) => {
       password: hashedPassword
     });
 
-    // Clear consumed OTP
-    if (channel === 'whatsapp') {
-      await clearWhatsAppOtp(formattedPhone);
-    } else {
-      await clearEmailOtp(trimmedEmail);
-    }
+    // Clear consumed WhatsApp OTP
+    await clearWhatsAppOtp(formattedPhone);
 
     res.status(201).json({
       success: true,
@@ -172,7 +167,7 @@ const registerUser = async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: 'Server error during registration' });
+    res.status(500).json({ message: 'Server error during registration.' });
   }
 };
 
