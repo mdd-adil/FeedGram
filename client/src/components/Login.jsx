@@ -8,22 +8,22 @@ import { setTokenWithExpiration } from '../utils/auth';
 const Login = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) return;
+    if (!identifier || !password) return;
 
     setIsLoading(true);
     setError("");
 
     try {
       const response = await axios.post(`${API_BASE_URL}/login`, {
-        email: email.trim(),
-        password: password
+        identifier: identifier.trim(),
+        password
       });
 
       if (response?.data?.token) {
@@ -49,7 +49,7 @@ const Login = () => {
             <span>FeedGram</span>
           </div>
           <h1>Welcome back</h1>
-          <p>Sign in to your account to continue</p>
+          <p>Sign in with your email or phone number</p>
         </div>
 
         {error && (
@@ -60,14 +60,14 @@ const Login = () => {
 
         <Form onSubmit={handleSubmit}>
           <Form.Group className="mb-3">
-            <Form.Label>Email Address</Form.Label>
+            <Form.Label>Email or Phone Number</Form.Label>
             <Form.Control
-              type="email"
-              placeholder="name@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              placeholder="e.g. name@example.com or +1234567890"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
-              autoComplete="email"
+              autoComplete="username"
             />
           </Form.Group>
 

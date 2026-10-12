@@ -1,7 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const forgotPassword = require('../controller/forgotPassword');
+const {
+  sendResetOtp,
+  verifyResetOtp,
+  resetPasswordWithOtp
+} = require('../controller/forgotPassword');
 
-router.post('/', forgotPassword);
+// Send OTP to email for password reset
+router.post('/', sendResetOtp);
+router.post('/send-otp', sendResetOtp);
+
+// Validate OTP
+router.post('/verify-otp', verifyResetOtp);
+
+// Complete password reset with verified OTP
+router.post('/reset', resetPasswordWithOtp);
 
 module.exports = router;

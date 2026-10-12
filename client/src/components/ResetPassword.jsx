@@ -116,7 +116,18 @@ const ResetPassword = () => {
             )}
           </button>
 
-          <div className="text-center pt-2">
+          <div className="text-center pt-2 d-flex flex-column gap-2">
+            <Link
+              to="/forgot-password"
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text-primary)",
+                fontWeight: 600,
+                textDecoration: "none"
+              }}
+            >
+              Reset using 6-Digit Email Code instead
+            </Link>
             <Link
               to="/login"
               style={{

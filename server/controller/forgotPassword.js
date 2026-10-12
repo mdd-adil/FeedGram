@@ -1,100 +1,191 @@
-const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const bcrypt = require('bcrypt');
 const userModel = require('../models/userModel');
+const {
+  formatPhoneNumber,
+  sendWhatsAppOtp,
+  verifyWhatsAppOtp,
+  clearWhatsAppOtp,
+  sendEmailOtp,
+  verifyEmailOtp,
+  clearEmailOtp
+} = require('../config/twilioService');
 
-const forgotPassword = async (req, res) => {
-    const { email } = req.body;
-    
-    try {
-        if (!email) {
-            return res.status(400).json({ message: 'Email is required' });
-        }
+/**
+ * Step 1: Send OTP to Phone (WhatsApp) or Email for password reset
+ */
+const sendResetOtp = async (req, res) => {
+  const { identifier, email, phone, channel = 'whatsapp' } = req.body;
+  const target = (phone || email || identifier || '').toString().trim();
 
-        // Find user by email
-        const user = await userModel.findOne({ email });
-        if (!user) {
-            return res.status(404).json({ message: 'No account with that email address exists.' });
-        }
-
-        // Check if email credentials are configured
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.error('Missing EMAIL_USER or EMAIL_PASS environment variables');
-            return res.status(500).json({ message: 'Email service not configured. Please contact support.' });
-        }
-
-        // Generate reset token
-        const resetToken = crypto.randomBytes(32).toString('hex');
-        
-        // Set token and expiration (1 hour from now)
-        user.resetPasswordToken = resetToken;
-        user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
-        
-        await user.save();
-
-        // Create transporter for sending email
-        const transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 587,
-            secure: false,
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS
-            },
-            tls: {
-                rejectUnauthorized: false
-            }
-        });
-
-        // Verify SMTP connection
-        try {
-            await transporter.verify();
-            console.log('SMTP connection verified successfully');
-        } catch (verifyError) {
-            console.error('SMTP Verification Error:', verifyError.message);
-            return res.status(500).json({ 
-                message: 'Email service authentication failed. Please check EMAIL_USER and EMAIL_PASS.' 
-            });
-        }
-
-        // Email content
-        const resetUrl = `https://feedgram-frontende.onrender.com/reset-password/${resetToken}`;
-        
-        const mailOptions = {
-            to: user.email,
-            from: process.env.EMAIL_USER,
-            subject: 'Password Reset Request - FeedGram',
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #667eea;">Password Reset Request</h2>
-                    <p>Hello ${user.username},</p>
-                    <p>You are receiving this email because you (or someone else) have requested the reset of the password for your account.</p>
-                    <p>Please click on the following link, or paste this into your browser to complete the process:</p>
-                    <div style="margin: 20px 0;">
-                        <a href="${resetUrl}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
-                    </div>
-                    <p>If you did not request this, please ignore this email and your password will remain unchanged.</p>
-                    <p><strong>This link will expire in 1 hour.</strong></p>
-                    <hr style="margin: 20px 0;">
-                    <p style="color: #666; font-size: 12px;">
-                        If the button above doesn't work, copy and paste this link into your browser:<br>
-                        ${resetUrl}
-                    </p>
-                </div>
-            `
-        };
-
-        // Send email
-        await transporter.sendMail(mailOptions);
-        
-        res.status(200).json({ 
-            message: 'An email has been sent to ' + user.email + ' with further instructions.',
-            success: true 
-        });
-
-    } catch (error) {
-        console.error('Forgot password error:', error);
-        res.status(500).json({ message: 'Error sending reset email. Please try again.' });
+  try {
+    if (!target) {
+      return res.status(400).json({ message: 'Phone number or email is required' });
     }
+
+    const formattedPhone = formatPhoneNumber(target);
+
+    // Find user by email or phone
+    const user = await userModel.findOne({
+      $or: [
+        { email: target.toLowerCase() },
+        { phone: target },
+        { phone: formattedPhone }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with this phone number or email address.' });
+    }
+
+    // Determine target delivery channel
+    const useWhatsApp = channel === 'whatsapp' || (!target.includes('@') && user.phone);
+
+    if (useWhatsApp) {
+      const recipientPhone = user.phone || formattedPhone;
+      if (!recipientPhone) {
+        return res.status(400).json({ message: 'No phone number associated with this account. Please use email reset.' });
+      }
+
+      await sendWhatsAppOtp(recipientPhone, user.username, 'reset');
+
+      return res.status(200).json({
+        success: true,
+        channel: 'whatsapp',
+        phone: recipientPhone,
+        message: `WhatsApp verification code sent to ${recipientPhone}`
+      });
+    } else {
+      await sendEmailOtp(user.email, user.username, 'reset');
+
+      return res.status(200).json({
+        success: true,
+        channel: 'email',
+        email: user.email,
+        message: `Password reset code sent to ${user.email}`
+      });
+    }
+  } catch (error) {
+    console.error('Forgot password send OTP error:', error);
+    res.status(500).json({
+      message: error.message || 'Error sending reset code. Please try again.'
+    });
+  }
 };
 
-module.exports = forgotPassword;
+/**
+ * Step 2: Validate the OTP for password reset
+ */
+const verifyResetOtp = async (req, res) => {
+  const { identifier, email, phone, otp, channel } = req.body;
+  const target = (phone || email || identifier || '').toString().trim();
+
+  try {
+    if (!target || !otp) {
+      return res.status(400).json({ message: 'Phone/Email and verification code are required' });
+    }
+
+    const formattedPhone = formatPhoneNumber(target);
+    const isPhone = channel === 'whatsapp' || !target.includes('@');
+
+    let verification;
+    if (isPhone) {
+      verification = await verifyWhatsAppOtp(formattedPhone, otp);
+    } else {
+      verification = await verifyEmailOtp(target.toLowerCase(), otp);
+    }
+
+    if (!verification.valid) {
+      return res.status(400).json({
+        message: verification.message || 'Invalid or expired verification code'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Code verified successfully'
+    });
+  } catch (error) {
+    console.error('Verify reset OTP error:', error);
+    res.status(500).json({ message: 'Verification failed. Please try again.' });
+  }
+};
+
+/**
+ * Step 3: Reset password using verified WhatsApp or Email OTP
+ */
+const resetPasswordWithOtp = async (req, res) => {
+  const { identifier, email, phone, otp, password, confirmPassword, channel } = req.body;
+  const target = (phone || email || identifier || '').toString().trim();
+
+  try {
+    if (!target || !otp || !password) {
+      return res.status(400).json({ message: 'Phone/Email, verification code, and new password are required' });
+    }
+
+    if (confirmPassword && password !== confirmPassword) {
+      return res.status(400).json({ message: 'Passwords do not match' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    const formattedPhone = formatPhoneNumber(target);
+    const isPhone = channel === 'whatsapp' || !target.includes('@');
+
+    // Find user
+    const user = await userModel.findOne({
+      $or: [
+        { email: target.toLowerCase() },
+        { phone: target },
+        { phone: formattedPhone }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User account not found' });
+    }
+
+    // Verify OTP
+    let verification;
+    if (isPhone) {
+      verification = await verifyWhatsAppOtp(user.phone || formattedPhone, otp);
+    } else {
+      verification = await verifyEmailOtp(user.email, otp);
+    }
+
+    if (!verification.valid) {
+      return res.status(400).json({
+        message: verification.message || 'Invalid or expired verification code'
+      });
+    }
+
+    // Hash and update password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    user.password = hashedPassword;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    await user.save();
+
+    // Clear consumed OTP
+    if (isPhone) {
+      await clearWhatsAppOtp(user.phone || formattedPhone);
+    } else {
+      await clearEmailOtp(user.email);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully! You can now log in with your new password.'
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Failed to reset password. Please try again.' });
+  }
+};
+
+module.exports = {
+  sendResetOtp,
+  verifyResetOtp,
+  resetPasswordWithOtp
+};

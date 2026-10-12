@@ -490,6 +490,14 @@
 }
 
 /* Minimalist Utilities */
+.otp-input-field {
+  letter-spacing: 0.35em;
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 .text-minimal-muted {
   color: var(--text-muted) !important;
 }
